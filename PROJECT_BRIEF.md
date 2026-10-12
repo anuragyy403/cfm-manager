@@ -1,4 +1,6 @@
-# CFM Manager — Project Brief
+# CFM Workplace — Project Brief
+
+Product name: **CFM Workplace** (by Clickfieldmedia). Name and logo live in `src/components/brand.tsx` and `public/logo.png`.
 
 Team task tracking and management for a company manager (admin) and their team members.
 

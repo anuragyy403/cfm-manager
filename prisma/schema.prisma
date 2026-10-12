@@ -1,8 +1,8 @@
-// CFM Manager database schema.
+// CFM Workplace database schema.
 //
 // The User / Session / Account / Verification models follow the layout
 // Better Auth expects (core tables + the `username` plugin + our `role` field).
-// Everything below them is CFM Manager's own domain model.
+// Everything below them is CFM Workplace's own domain model.
 
 generator client {
   provider = "prisma-client"

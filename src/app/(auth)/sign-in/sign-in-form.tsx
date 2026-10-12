@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
+import { APP_NAME } from "@/components/brand";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -46,7 +47,7 @@ export function SignInForm() {
       <div className="space-y-1">
         <h2 className="text-2xl font-semibold tracking-tight">Welcome back</h2>
         <p className="text-sm text-muted-foreground">
-          Sign in to your CFM Manager account.
+          Sign in to your {APP_NAME} account.
         </p>
       </div>
 
@@ -85,7 +86,7 @@ export function SignInForm() {
       </form>
 
       <p className="text-center text-sm text-muted-foreground">
-        New to CFM Manager?{" "}
+        New to {APP_NAME}?{" "}
         <Link href="/sign-up" className="font-medium text-primary hover:underline">
           Create an account
         </Link>

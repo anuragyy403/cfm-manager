@@ -8,7 +8,7 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
-  // Every page in CFM Manager is per-user and live, so Cache Components /
+  // Every page in CFM Workplace is per-user and live, so Cache Components /
   // partial prefetching are left off and pages render dynamically per request.
   poweredByHeader: false,
   async headers() {

@@ -11,7 +11,7 @@ import {
   LogOut,
   Users,
 } from "lucide-react";
-import { BrandMark } from "@/components/brand";
+import { APP_NAME, BrandMark } from "@/components/brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -86,7 +86,7 @@ export function AppShell({
                 <Link href="/">
                   <BrandMark />
                   <div className="grid flex-1 text-left leading-tight">
-                    <span className="truncate font-semibold">CFM Manager</span>
+                    <span className="truncate font-semibold">{APP_NAME}</span>
                     <span className="truncate text-xs text-muted-foreground">
                       {user.role === "ADMIN" ? "Admin workspace" : "Team member"}
                     </span>

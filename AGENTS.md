@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-## CFM Manager
+## CFM Workplace
 
 Read `PROJECT_BRIEF.md` before making changes. It lists the agreed decisions and the permission rules that must always hold.
 

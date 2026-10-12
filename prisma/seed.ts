@@ -1,5 +1,5 @@
 /**
- * Development seed for CFM Manager.
+ * Development seed for CFM Workplace.
  *
  * Wipes the local database and creates:
  *   - 1 admin account

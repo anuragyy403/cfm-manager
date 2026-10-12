@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Loader2, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
+import { APP_NAME } from "@/components/brand";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -91,7 +92,7 @@ export function AddMember() {
             {!showResults && (
               <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
                 <Search className="size-5" />
-                Start typing to find people who have a CFM Manager account.
+                Start typing to find people who have a {APP_NAME} account.
               </div>
             )}
             {showResults && searching && results.length === 0 && (

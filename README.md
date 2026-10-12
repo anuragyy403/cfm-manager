@@ -1,4 +1,6 @@
-# CFM Manager
+# CFM Workplace
+
+Clickfieldmedia's team task tracking and management app.
 
 Team task tracking and management. The manager (admin) builds a team, assigns tasks, monitors progress and analyses performance; team members see and update only their own tasks.
 
