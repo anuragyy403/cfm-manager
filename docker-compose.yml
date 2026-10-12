@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:17-alpine
+    container_name: cfm-manager-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: cfm
+      POSTGRES_PASSWORD: cfm_dev_password
+      POSTGRES_DB: cfm_manager
+    ports:
+      - "5433:5432"
+    volumes:
+      - cfm-db-data:/var/lib/postgresql/data
+
+volumes:
+  cfm-db-data:

@@ -7,3 +7,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
 
 <!-- END:nextjs-agent-rules -->
+
+## CFM Manager
+
+Read `PROJECT_BRIEF.md` before making changes. It lists the agreed decisions and the permission rules that must always hold.
+
+- All data access and permission checks live in `src/server/` (server-only). Never trust role or ownership from the client.
+- Prisma client is generated to `src/generated/prisma` (`import { ... } from "@/generated/prisma/client"`).
