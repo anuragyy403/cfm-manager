@@ -10,7 +10,9 @@ import {
   UserRoundPen,
 } from "lucide-react";
 import type { TaskActivityType } from "@/generated/prisma/client";
+import { UserAvatar } from "@/components/user-avatar";
 import { formatDateTime, formatRelative } from "@/lib/format";
+import { cn } from "@/lib/utils";
 
 export type FeedActivity = {
   id: string;
@@ -30,6 +32,17 @@ const icons: Record<TaskActivityType, typeof Pencil> = {
   REOPENED: RotateCcw,
   ARCHIVED: Archive,
   RESTORED: ArchiveRestore,
+};
+
+const badgeTone: Record<TaskActivityType, string> = {
+  CREATED: "bg-brand-navy text-white",
+  UPDATED: "bg-slate-500 text-white",
+  REASSIGNED: "bg-violet-500 text-white",
+  STARTED: "bg-sky-500 text-white",
+  COMPLETED: "bg-emerald-500 text-white",
+  REOPENED: "bg-amber-500 text-white",
+  ARCHIVED: "bg-slate-400 text-white",
+  RESTORED: "bg-slate-500 text-white",
 };
 
 type Details = {
@@ -82,22 +95,33 @@ export function ActivityFeed({
     return <p className="text-sm text-muted-foreground">{emptyText}</p>;
   }
   return (
-    <ol className="space-y-4">
+    <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-4 before:w-px before:bg-border">
       {activities.map((a) => {
         const Icon = icons[a.type];
         const reason = a.type === "REOPENED" ? (a.details as Details | null)?.reason : undefined;
         return (
-          <li key={a.id} className="flex gap-3">
-            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <Icon className="size-3.5" />
+          <li key={a.id} className="relative flex gap-3">
+            <div className="relative shrink-0">
+              <UserAvatar name={a.actor.name} id={a.actor.id} className="ring-4 ring-card" />
+              <span
+                className={cn(
+                  "absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full ring-2 ring-card",
+                  badgeTone[a.type],
+                )}
+              >
+                <Icon className="size-2.5" />
+              </span>
             </div>
-            <div className="min-w-0 text-sm">
+            <div className="min-w-0 pt-0.5 text-sm">
               <p>
                 <span className="font-medium">{a.actor.name}</span> {describe(a, names)}
                 {a.task && taskHref && (
                   <>
                     {" "}
-                    <Link href={taskHref(a.task.id)} className="font-medium text-primary hover:underline">
+                    <Link
+                      href={taskHref(a.task.id)}
+                      className="font-medium text-brand-orange-hover hover:underline"
+                    >
                       {a.task.title}
                     </Link>
                   </>

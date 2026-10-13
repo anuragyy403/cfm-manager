@@ -51,6 +51,25 @@ export async function listTeamMembers(teamId: string) {
   });
 }
 
+/** Team members for the assignee picker, with how many open tasks each already has. */
+export async function listMemberOptions(teamId: string) {
+  const [members, open] = await Promise.all([
+    listTeamMembers(teamId),
+    prisma.task.groupBy({
+      by: ["assigneeId"],
+      where: { teamId, archivedAt: null, status: { not: "COMPLETED" } },
+      _count: { _all: true },
+    }),
+  ]);
+  const openBy = new Map(open.map((o) => [o.assigneeId, o._count._all]));
+  return members.map((m) => ({
+    id: m.user.id,
+    name: m.user.name,
+    username: m.user.username,
+    openTasks: openBy.get(m.user.id) ?? 0,
+  }));
+}
+
 export type UserSearchResult = {
   id: string;
   name: string;

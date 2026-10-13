@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import {
   Table,
   TableBody,
@@ -8,11 +8,12 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatDateTime, formatRelative, initials } from "@/lib/format";
-import { completedOnTime, isDueSoon, isOverdue } from "@/lib/tasks/rules";
+import { formatDate, formatDateTime } from "@/lib/format";
+import { completedOnTime } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
 import type { TaskListItem } from "@/server/tasks";
 import { PriorityBadge, StatusBadge } from "./badges";
+import { DueChip } from "./due-chip";
 
 /** Admin task table: every task with who owns it, its status and its dates. */
 export function TaskTable({
@@ -22,7 +23,6 @@ export function TaskTable({
   tasks: TaskListItem[];
   showAssignee?: boolean;
 }) {
-  const now = new Date();
   return (
     <Table>
       <TableHeader>
@@ -38,8 +38,6 @@ export function TaskTable({
       </TableHeader>
       <TableBody>
         {tasks.map((t) => {
-          const overdue = isOverdue(t, now);
-          const dueSoon = isDueSoon(t, now);
           return (
             <TableRow key={t.id} className={cn(t.archivedAt && "opacity-60")}>
               <TableCell className="max-w-80">
@@ -53,9 +51,7 @@ export function TaskTable({
               {showAssignee && (
                 <TableCell>
                   <Link href={`/admin/team/${t.assignee.id}`} className="flex items-center gap-2 hover:underline">
-                    <Avatar className="size-6">
-                      <AvatarFallback className="text-[10px]">{initials(t.assignee.name)}</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
                     <span className="text-sm">{t.assignee.name}</span>
                   </Link>
                 </TableCell>
@@ -67,22 +63,9 @@ export function TaskTable({
                 <PriorityBadge priority={t.priority} />
               </TableCell>
               <TableCell>
-                <div className="grid leading-tight" title={formatDateTime(t.dueAt)}>
+                <div className="flex flex-col items-start gap-1">
                   <span className="text-sm">{formatDateTime(t.dueAt)}</span>
-                  {t.status !== "COMPLETED" && (
-                    <span
-                      className={cn(
-                        "text-xs",
-                        overdue
-                          ? "font-medium text-red-600 dark:text-red-400"
-                          : dueSoon
-                            ? "font-medium text-amber-600 dark:text-amber-400"
-                            : "text-muted-foreground",
-                      )}
-                    >
-                      {overdue ? `Overdue ${formatRelative(t.dueAt).replace(" ago", "")}` : `Due ${formatRelative(t.dueAt)}`}
-                    </span>
-                  )}
+                  {t.status !== "COMPLETED" && <DueChip task={t} />}
                 </div>
               </TableCell>
               <TableCell className="text-sm text-muted-foreground" title={formatDateTime(t.assignedAt)}>

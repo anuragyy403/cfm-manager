@@ -4,6 +4,20 @@ import { cn } from "@/lib/utils";
 export const APP_NAME = "CFM Workplace";
 export const COMPANY_NAME = "Clickfieldmedia";
 
+/** Office details shown in the footers. */
+export const COMPANY = {
+  name: COMPANY_NAME,
+  address: ["3/245, Vijayant Khand", "Gomti Nagar, Lucknow", "Uttar Pradesh 226010"],
+  phone: "+91 63937 35033",
+  phoneHref: "tel:+916393735033",
+  email: "clickfieldmedia@gmail.com",
+  website: "https://clickfieldmedia.com",
+  websiteLabel: "clickfieldmedia.com",
+  mapsUrl:
+    "https://www.google.com/maps/search/?api=1&query=" +
+    encodeURIComponent("3/245, Vijayant Khand, Gomti Nagar, Lucknow 226010"),
+};
+
 /** The Clickfieldmedia round logo. */
 export function BrandMark({ className }: { className?: string }) {
   return (

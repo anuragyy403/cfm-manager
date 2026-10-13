@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
-import { ClipboardList } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { EmptyIllustration } from "@/components/illustrations";
 import { PageHeader } from "@/components/page-header";
+import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskTable } from "@/components/tasks/task-table";
 import { Card, CardContent } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { TASK_PRIORITIES } from "@/lib/tasks/rules";
 import { requireAdmin } from "@/server/session";
 import { countTeamTasksByView, listTeamTasks, TASK_VIEWS, type TaskView } from "@/server/tasks";
-import { getAdminTeam, listTeamMembers } from "@/server/teams";
+import { getAdminTeam, listMemberOptions } from "@/server/teams";
 import { NewTaskButton } from "./new-task-button";
 import { TaskFilters } from "./task-filters";
 
@@ -22,6 +22,7 @@ export default async function AdminTasksPage({ searchParams }: PageProps<"/admin
   const admin = await requireAdmin();
   const sp = await searchParams;
 
+  const layout = one(sp.layout) === "board" ? "board" : "table";
   const viewParam = one(sp.view);
   const view: TaskView = TASK_VIEWS.includes(viewParam as TaskView) ? (viewParam as TaskView) : "all";
   const priorityParam = one(sp.priority);
@@ -30,12 +31,12 @@ export default async function AdminTasksPage({ searchParams }: PageProps<"/admin
   const q = one(sp.q)?.slice(0, 100);
 
   const team = await getAdminTeam(admin);
-  const [members, tasks, counts] = await Promise.all([
-    team ? listTeamMembers(team.id) : Promise.resolve([]),
-    listTeamTasks(admin, { view, priority, assigneeId, q }),
+  const [memberOptions, tasks, counts] = await Promise.all([
+    team ? listMemberOptions(team.id) : Promise.resolve([]),
+    // The board shows every active task split into status columns.
+    listTeamTasks(admin, { view: layout === "board" ? "all" : view, priority, assigneeId, q }),
     countTeamTasksByView(admin),
   ]);
-  const memberOptions = members.map((m) => ({ id: m.user.id, name: m.user.name, username: m.user.username }));
 
   return (
     <>
@@ -46,28 +47,33 @@ export default async function AdminTasksPage({ searchParams }: PageProps<"/admin
         actions={<NewTaskButton members={memberOptions} />}
       />
       <div className="space-y-4">
-        <TaskFilters members={memberOptions} counts={counts} />
-        <Card className="py-0">
-          <CardContent className="p-0">
-            {tasks.length === 0 ? (
-              <Empty className="py-16">
-                <EmptyHeader>
-                  <EmptyMedia variant="icon">
-                    <ClipboardList />
-                  </EmptyMedia>
-                  <EmptyTitle>No tasks here</EmptyTitle>
-                  <EmptyDescription>
-                    {counts.all === 0
-                      ? "Create your first task and assign it to a team member."
-                      : "No tasks match these filters."}
-                  </EmptyDescription>
-                </EmptyHeader>
-              </Empty>
-            ) : (
+        <TaskFilters members={memberOptions} counts={counts} layout={layout} />
+        {tasks.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center gap-2 py-14 text-center">
+              <EmptyIllustration kind={counts.all === 0 ? "tasks" : "search"} />
+              <p className="mt-2 font-semibold">{counts.all === 0 ? "No tasks yet" : "No tasks here"}</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                {counts.all === 0
+                  ? "Create your first task and assign it to a team member. It shows up on their dashboard straight away."
+                  : "No tasks match these filters. Try another tab or clear the filters."}
+              </p>
+              {counts.all === 0 && (
+                <div className="mt-3">
+                  <NewTaskButton members={memberOptions} />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        ) : layout === "board" ? (
+          <TaskBoard tasks={tasks} />
+        ) : (
+          <Card className="py-0">
+            <CardContent className="p-0">
               <TaskTable tasks={tasks} />
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </>
   );

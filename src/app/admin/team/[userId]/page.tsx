@@ -14,12 +14,14 @@ import { StatCard } from "@/components/stat-card";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { TaskTable } from "@/components/tasks/task-table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDate, formatDuration, formatPercent, initials } from "@/lib/format";
+import { UserAvatar } from "@/components/user-avatar";
+import { formatDate, formatDuration, formatPercent } from "@/lib/format";
 import { getMemberOverview } from "@/server/members";
 import { requireAdmin } from "@/server/session";
+import { getAdminTeam, listMemberOptions } from "@/server/teams";
+import { NewTaskButton } from "../../tasks/new-task-button";
 
 export const metadata: Metadata = { title: "Member" };
 
@@ -27,6 +29,8 @@ export default async function MemberProfilePage({ params }: PageProps<"/admin/te
   const admin = await requireAdmin();
   const { userId } = await params;
   const { user, joinedAt, isMember, tasks, metrics, activities } = await getMemberOverview(admin, userId);
+  const team = await getAdminTeam(admin);
+  const memberOptions = team ? await listMemberOptions(team.id) : [];
 
   return (
     <>
@@ -38,17 +42,27 @@ export default async function MemberProfilePage({ params }: PageProps<"/admin/te
         </Link>
       </Button>
 
-      <div className="mb-6 flex items-center gap-4">
-        <Avatar className="size-14">
-          <AvatarFallback className="text-lg">{initials(user.name)}</AvatarFallback>
-        </Avatar>
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
-          <p className="text-sm text-muted-foreground">
-            {user.username && `@${user.username} · `}
-            {user.email}
-            {joinedAt && ` · on the team since ${formatDate(joinedAt)}`}
-          </p>
+      <div className="relative mb-6 overflow-hidden rounded-2xl border bg-card p-6">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-brand-navy to-brand-navy-soft" />
+        <div className="relative flex flex-col gap-4 pt-6 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-end gap-4">
+            <UserAvatar name={user.name} id={user.id} size="lg" className="size-20 text-2xl ring-4 ring-card" />
+            <div className="min-w-0 pb-1">
+              <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
+              <p className="text-sm text-muted-foreground">
+                {user.username && `@${user.username} · `}
+                {user.email}
+                {joinedAt && ` · on the team since ${formatDate(joinedAt)}`}
+              </p>
+            </div>
+          </div>
+          {isMember && (
+            <NewTaskButton
+              members={memberOptions}
+              defaultAssigneeId={user.id}
+              label={`New task for ${user.name.split(" ")[0]}`}
+            />
+          )}
         </div>
       </div>
 

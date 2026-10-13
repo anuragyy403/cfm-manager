@@ -24,10 +24,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { UserAvatar } from "@/components/user-avatar";
 import { PRIORITY_LABELS, TASK_PRIORITIES, type TaskPriority } from "@/lib/tasks/rules";
+import { cn } from "@/lib/utils";
 import { createTaskAction, updateTaskAction } from "@/server/actions/admin";
 
-export type MemberOption = { id: string; name: string; username: string | null };
+export type MemberOption = {
+  id: string;
+  name: string;
+  username: string | null;
+  /** Open (not completed) tasks already assigned; shown as a workload hint. */
+  openTasks?: number;
+};
 
 export type EditableTask = {
   id: string;
@@ -44,17 +52,20 @@ export function TaskFormDialog({
   onOpenChange,
   members,
   task,
+  defaultAssigneeId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   members: MemberOption[];
   /** When set the dialog edits this task; otherwise it creates a new one. */
   task?: EditableTask;
+  /** Pre-selects the assignee for a new task (e.g. from a member's profile). */
+  defaultAssigneeId?: string;
 }) {
   const router = useRouter();
   const [pending, setPending] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? "");
+  const [assigneeId, setAssigneeId] = useState(task?.assigneeId ?? defaultAssigneeId ?? "");
   const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? "MEDIUM");
 
   const editing = !!task;
@@ -142,7 +153,22 @@ export function TaskFormDialog({
                   <SelectContent>
                     {members.map((m) => (
                       <SelectItem key={m.id} value={m.id}>
-                        {m.name}
+                        <span className="flex w-full items-center gap-2">
+                          <UserAvatar name={m.name} id={m.id} size="xs" />
+                          <span className="truncate">{m.name}</span>
+                          {m.openTasks !== undefined && (
+                            <span
+                              className={cn(
+                                "ml-auto rounded-full px-1.5 text-[11px] tabular-nums",
+                                m.openTasks >= 4
+                                  ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200"
+                                  : "bg-muted text-muted-foreground",
+                              )}
+                            >
+                              {m.openTasks} open
+                            </span>
+                          )}
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -189,7 +215,7 @@ export function TaskFormDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={pending}>
             Cancel
           </Button>
-          <Button type="submit" form="task-form" disabled={pending}>
+          <Button type="submit" form="task-form" disabled={pending} variant={editing ? "default" : "brand"}>
             {pending && <Loader2 className="animate-spin" />}
             {editing ? "Save changes" : "Create & assign"}
           </Button>

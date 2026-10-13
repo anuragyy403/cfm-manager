@@ -6,10 +6,10 @@ import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { PriorityBadge, StatusBadge } from "@/components/tasks/badges";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatDateTime, initials } from "@/lib/format";
+import { formatDateTime } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { requireAdmin } from "@/server/session";
 import { getTaskForAdmin } from "@/server/tasks";
@@ -141,9 +141,7 @@ export default async function AdminTaskPage({ params }: PageProps<"/admin/tasks/
             </CardHeader>
             <CardContent>
               <Link href={`/admin/team/${task.assignee.id}`} className="flex items-center gap-3 hover:underline">
-                <Avatar className="size-10">
-                  <AvatarFallback>{initials(task.assignee.name)}</AvatarFallback>
-                </Avatar>
+                <UserAvatar name={task.assignee.name} id={task.assignee.id} size="md" />
                 <div className="grid leading-tight">
                   <span className="font-medium">{task.assignee.name}</span>
                   <span className="text-sm text-muted-foreground">{task.assignee.email}</span>

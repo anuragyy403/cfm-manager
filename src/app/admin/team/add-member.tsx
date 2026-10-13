@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { Check, Loader2, Search, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { APP_NAME } from "@/components/brand";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -15,7 +15,6 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { initials } from "@/lib/format";
 import { addMemberAction, searchUsersAction } from "@/server/actions/admin";
 import type { UserSearchResult } from "@/server/teams";
 
@@ -73,7 +72,7 @@ export function AddMember() {
       }}
     >
       <PopoverTrigger asChild>
-        <Button>
+        <Button variant="brand">
           <UserPlus />
           Add member
         </Button>
@@ -113,9 +112,7 @@ export function AddMember() {
                     onSelect={() => !u.inTeam && add(u)}
                     className="gap-3"
                   >
-                    <Avatar className="size-8">
-                      <AvatarFallback className="text-xs">{initials(u.name)}</AvatarFallback>
-                    </Avatar>
+                    <UserAvatar name={u.name} id={u.id} />
                     <div className="grid min-w-0 flex-1 leading-tight">
                       <span className="truncate font-medium">{u.name}</span>
                       {u.username && (

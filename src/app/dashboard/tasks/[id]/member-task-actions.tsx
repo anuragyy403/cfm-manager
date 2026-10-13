@@ -15,6 +15,7 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import type { TaskStatus } from "@/lib/tasks/rules";
+import { celebrate } from "@/lib/celebrate";
 import { completeTaskAction, startTaskAction } from "@/server/actions/member";
 
 export function MemberTaskActions({ taskId, status }: { taskId: string; status: TaskStatus }) {
@@ -43,7 +44,8 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
       }
       setNoteError(undefined);
       setCompleteOpen(false);
-      toast.success("Task completed", { description: "Your manager has been updated." });
+      void celebrate();
+      toast.success("Task completed. Great work! 🎉", { description: "Your manager can see it's done." });
     });
   }
 
@@ -55,7 +57,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
           Start working
         </Button>
       )}
-      <Button onClick={() => setCompleteOpen(true)} disabled={pending}>
+      <Button variant="brand" onClick={() => setCompleteOpen(true)} disabled={pending}>
         <CheckCircle2 />
         Mark as completed
       </Button>
@@ -89,7 +91,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
             <Button variant="outline" onClick={() => setCompleteOpen(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button type="submit" form="complete-form" disabled={pending}>
+            <Button type="submit" form="complete-form" disabled={pending} variant="brand">
               {pending && <Loader2 className="animate-spin" />}
               Submit &amp; complete
             </Button>

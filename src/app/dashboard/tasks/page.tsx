@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Inbox } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { EmptyIllustration } from "@/components/illustrations";
 import { PageHeader } from "@/components/page-header";
 import { TaskListItem } from "@/components/tasks/task-list-item";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { displayStatus } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
 import { requireMember } from "@/server/session";
@@ -58,17 +57,19 @@ export default async function MyTasksPage({ searchParams }: PageProps<"/dashboar
       </nav>
 
       {tasks.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Inbox />
-            </EmptyMedia>
-            <EmptyTitle>No tasks here</EmptyTitle>
-            <EmptyDescription>
-              {all.length === 0 ? "You don't have any tasks yet." : "No tasks in this category."}
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <div className="flex flex-col items-center gap-2 rounded-2xl border bg-card py-14 text-center">
+          <EmptyIllustration kind={all.length === 0 ? "tasks" : view === "OVERDUE" ? "done" : "search"} />
+          <p className="mt-2 font-semibold">
+            {view === "OVERDUE" && all.length > 0 ? "Nothing overdue" : "No tasks here"}
+          </p>
+          <p className="text-sm text-muted-foreground">
+            {all.length === 0
+              ? "You don't have any tasks yet."
+              : view === "OVERDUE"
+                ? "You're on top of every deadline. Nice work!"
+                : "No tasks in this category."}
+          </p>
+        </div>
       ) : (
         <div className="space-y-2">
           {tasks.map((t) => (

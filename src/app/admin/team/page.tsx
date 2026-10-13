@@ -1,10 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Users } from "lucide-react";
+import { EmptyIllustration } from "@/components/illustrations";
 import { PageHeader } from "@/components/page-header";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Progress } from "@/components/ui/progress";
 import {
   Table,
@@ -14,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatDate, formatPercent, initials } from "@/lib/format";
+import { formatDate, formatPercent } from "@/lib/format";
 import { getTeamAnalytics } from "@/server/analytics";
 import { requireAdmin } from "@/server/session";
 import { getAdminTeam } from "@/server/teams";
@@ -32,6 +31,9 @@ export default async function TeamPage() {
   if (!team) {
     return (
       <div className="mx-auto max-w-xl">
+        <div className="mb-6 flex justify-center">
+          <EmptyIllustration kind="team" className="h-32" />
+        </div>
         <PageHeader title="Create your team" description="Start by creating a team. Then add the people who work with you." />
         <Card>
           <CardContent>
@@ -67,18 +69,17 @@ export default async function TeamPage() {
         </CardHeader>
         <CardContent>
           {analytics.members.length === 0 ? (
-            <Empty>
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <Users />
-                </EmptyMedia>
-                <EmptyTitle>No members yet</EmptyTitle>
-                <EmptyDescription>
-                  Use <strong>Add member</strong> to search for people by name or username once they&apos;ve
-                  created an account.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <EmptyIllustration kind="team" />
+              <p className="mt-2 font-semibold">No members yet</p>
+              <p className="max-w-sm text-sm text-muted-foreground">
+                Ask your colleagues to sign up, then use <strong>Add member</strong> to find them by name or
+                username.
+              </p>
+              <div className="mt-3">
+                <AddMember />
+              </div>
+            </div>
           ) : (
             <Table>
               <TableHeader>
@@ -98,9 +99,7 @@ export default async function TeamPage() {
                   <TableRow key={user.id}>
                     <TableCell>
                       <Link href={`/admin/team/${user.id}`} className="flex items-center gap-3 hover:underline">
-                        <Avatar className="size-8">
-                          <AvatarFallback className="text-xs">{initials(user.name)}</AvatarFallback>
-                        </Avatar>
+                        <UserAvatar name={user.name} id={user.id} />
                         <div className="grid leading-tight">
                           <span className="font-medium">{user.name}</span>
                           <span className="text-xs text-muted-foreground">

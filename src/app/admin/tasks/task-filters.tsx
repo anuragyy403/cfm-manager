@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
-import { Loader2, Search, X } from "lucide-react";
+import { KanbanSquare, Loader2, Rows3, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { PRIORITY_LABELS, TASK_PRIORITIES } from "@/lib/tasks/rules";
+import { cn } from "@/lib/utils";
 
 const VIEWS = [
   { value: "all", label: "All" },
@@ -27,9 +28,11 @@ const VIEWS = [
 export function TaskFilters({
   members,
   counts,
+  layout,
 }: {
   members: { id: string; name: string }[];
   counts: Record<string, number>;
+  layout: "table" | "board";
 }) {
   const router = useRouter();
   const pathname = usePathname();
@@ -60,21 +63,51 @@ export function TaskFilters({
 
   return (
     <div className="space-y-3">
-      <div className="overflow-x-auto">
-        <Tabs value={view} onValueChange={(v) => update({ view: v })}>
-          <TabsList>
-            {VIEWS.map((v) => (
-              <TabsTrigger key={v.value} value={v.value} className="gap-1.5">
-                {v.label}
-                {counts[v.value] !== undefined && (
-                  <span className="rounded-full bg-muted-foreground/10 px-1.5 text-xs tabular-nums text-muted-foreground">
-                    {counts[v.value]}
-                  </span>
-                )}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        {layout === "table" ? (
+          <div className="overflow-x-auto overflow-y-hidden">
+            <Tabs value={view} onValueChange={(v) => update({ view: v })}>
+              <TabsList>
+                {VIEWS.map((v) => (
+                  <TabsTrigger key={v.value} value={v.value} className="gap-1.5">
+                    {v.label}
+                    {counts[v.value] !== undefined && (
+                      <span className="rounded-full bg-muted-foreground/10 px-1.5 text-xs tabular-nums text-muted-foreground">
+                        {counts[v.value]}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            All active tasks by status. Open a card to see details or make changes.
+          </p>
+        )}
+        <div className="inline-flex w-fit shrink-0 rounded-lg border bg-card p-0.5" role="group" aria-label="Layout">
+          {(
+            [
+              { value: "table", label: "Table", icon: Rows3 },
+              { value: "board", label: "Board", icon: KanbanSquare },
+            ] as const
+          ).map((l) => (
+            <button
+              key={l.value}
+              type="button"
+              aria-pressed={layout === l.value}
+              onClick={() => update({ layout: l.value === "table" ? null : "board", view: null })}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground",
+                layout === l.value && "bg-brand-navy text-white hover:text-white",
+              )}
+            >
+              <l.icon className="size-4" />
+              {l.label}
+            </button>
+          ))}
+        </div>
       </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <div className="relative sm:w-72">

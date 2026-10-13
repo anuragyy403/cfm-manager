@@ -5,11 +5,16 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-navy-soft: var(--brand-navy-soft);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-hover: var(--brand-orange-hover);
+  --color-brand-orange-soft: var(--brand-orange-soft);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-sans);
+  --font-heading: var(--font-display);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,24 +54,31 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.488 0.217 264);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.96 0.012 264);
-  --accent-foreground: oklch(0.205 0 0);
+  /* Clickfieldmedia brand (from the logo) */
+  --brand-navy: #0c243e;
+  --brand-navy-soft: #16365a;
+  --brand-orange: #e65e15;
+  --brand-orange-hover: #cc5211;
+  --brand-orange-soft: #fdf0e8;
+
+  --background: #f6f7f9;
+  --foreground: #0f1b2a;
+  --card: #ffffff;
+  --card-foreground: #0f1b2a;
+  --popover: #ffffff;
+  --popover-foreground: #0f1b2a;
+  --primary: var(--brand-navy);
+  --primary-foreground: #ffffff;
+  --secondary: #eef1f5;
+  --secondary-foreground: #0f1b2a;
+  --muted: #eef1f5;
+  --muted-foreground: #5f6b7a;
+  --accent: #eaf0f7;
+  --accent-foreground: #0f1b2a;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.488 0.217 264 / 60%);
+  --border: #e3e7ed;
+  --input: #dde2ea;
+  --ring: rgb(230 94 21 / 55%);
   --chart-1: oklch(0.546 0.215 263);
   --chart-2: oklch(0.6 0.15 163);
   --chart-3: oklch(0.75 0.16 70);
@@ -80,17 +92,23 @@
   --series-4: #eda100;
   --chart-grid: #e1e0d9;
   --chart-axis: #898781;
-  --sidebar: oklch(0.985 0.003 264);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.488 0.217 264);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* Navy sidebar with orange highlights */
+  --sidebar: var(--brand-navy);
+  --sidebar-foreground: #dbe3ee;
+  --sidebar-primary: var(--brand-orange);
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(255 255 255 / 9%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 9%);
+  --sidebar-ring: var(--brand-orange);
 }
 
 .dark {
+  --brand-navy: #0c243e;
+  --brand-navy-soft: #16365a;
+  --brand-orange: #f07a3a;
+  --brand-orange-hover: #e65e15;
+  --brand-orange-soft: #3a2316;
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
@@ -120,9 +138,9 @@
   --series-4: #c98500;
   --chart-grid: #2c2c2a;
   --chart-axis: #898781;
-  --sidebar: oklch(0.205 0 0);
+  --sidebar: #0a1d33;
   --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary: var(--brand-orange);
   --sidebar-primary-foreground: oklch(0.985 0 0);
   --sidebar-accent: oklch(0.269 0 0);
   --sidebar-accent-foreground: oklch(0.985 0 0);
