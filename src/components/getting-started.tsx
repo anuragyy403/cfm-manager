@@ -41,7 +41,7 @@ export function GettingStarted({ steps }: { steps: SetupStep[] }) {
                       s.done
                         ? "bg-emerald-500 text-white"
                         : isNext
-                          ? "bg-brand-orange text-white"
+                          ? "bg-sun text-[#1f1e1b]"
                           : "bg-muted text-muted-foreground",
                     )}
                   >

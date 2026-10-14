@@ -1,62 +1,28 @@
-import { CheckCircle2, CircleDot, Clock, Sparkles } from "lucide-react";
-import { APP_NAME, Brand, BrandMark, COMPANY_NAME } from "@/components/brand";
+import Image from "next/image";
+import { AuthNavbar } from "@/components/auth-navbar";
+import { APP_NAME, BrandMark, COMPANY_NAME } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
-
-const highlights = [
-  "Assign work to the right person in seconds",
-  "See every task's status, deadline and history",
-  "Track completion and on-time rates across the team",
-];
+import officePhoto from "@/assets/login-office.webp";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
-      <div className="grid flex-1 lg:min-h-svh lg:grid-cols-[1.05fr_1fr]">
-        {/* Brand panel in Clickfieldmedia navy with the logo's orange as accent. */}
-        <aside className="relative hidden flex-col justify-between overflow-hidden bg-brand-navy p-10 text-white lg:flex xl:p-14">
-          <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,rgb(230_94_21/0.18),transparent_55%)]" />
+      <AuthNavbar />
+      <div className="grid flex-1 lg:min-h-[calc(100svh-72px)] lg:grid-cols-[1.45fr_1fr]">
+        <BrandPanel />
+
+        {/* Form side on the warm paper background of clickfieldmedia.com. */}
+        <main className="relative flex flex-col items-center justify-center gap-8 overflow-hidden bg-[#eee9e1] px-5 py-12 md:px-10 lg:px-8 xl:px-12">
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.07] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:22px_22px]"
+            className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_85%_0%,rgb(230_94_21/0.08),transparent_45%),radial-gradient(circle_at_0%_100%,rgb(10_37_65/0.06),transparent_50%)]"
             aria-hidden
           />
-
-          <div className="relative flex items-center gap-3">
-            <BrandMark className="size-11 ring-0" />
-            <div className="grid leading-tight">
-              <span className="text-lg font-semibold">{APP_NAME}</span>
-              <span className="text-xs text-white/60">by {COMPANY_NAME}</span>
-            </div>
-          </div>
-
-          <div className="relative space-y-10">
-            <div className="max-w-md space-y-5">
-              <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white/90 ring-1 ring-white/15">
-                <Sparkles className="size-3.5 text-brand-orange" /> Your team&apos;s workspace
-              </span>
-              <h1 className="text-4xl font-semibold leading-[1.15] tracking-tight">
-                Plan, assign and track your team&apos;s work{" "}
-                <span className="text-brand-orange">in one place.</span>
-              </h1>
-              <ul className="space-y-3 text-white/80">
-                {highlights.map((h) => (
-                  <li key={h} className="flex items-start gap-3">
-                    <CheckCircle2 className="mt-0.5 size-5 shrink-0 text-brand-orange" />
-                    <span>{h}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <PreviewCards />
-          </div>
-
-          <p className="relative text-sm text-white/50">Made for the {COMPANY_NAME} team</p>
-        </aside>
-
-        <main className="flex flex-col items-center justify-center gap-8 bg-background px-6 py-12 md:px-10">
-          <Brand className="lg:hidden" />
-          <div className="w-full max-w-sm rounded-2xl border bg-card p-6 shadow-xl shadow-brand-navy/5 sm:p-8">
+          <div className="relative w-full max-w-md rounded-3xl border border-[#e0d8ca] bg-[#f7f4ef] p-6 shadow-[0_24px_60px_-20px_rgb(10_37_65/0.25)] [--input:#d9d1c3] sm:p-9">
             {children}
           </div>
+          <p className="relative text-xs text-[#5f625f]">
+            Made for the {COMPANY_NAME} team · Lucknow, India
+          </p>
         </main>
       </div>
       <SiteFooter />
@@ -64,34 +30,102 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
   );
 }
 
-/** Decorative glimpse of the app on the brand panel. */
-function PreviewCards() {
+// The photo's aspect ratio. The stage below is sized like `object-cover`, so the text laid on
+// top stays pinned to the same spot on the wall at every screen size.
+const PHOTO_RATIO = "1006 / 924";
+const stage: React.CSSProperties = {
+  width: `max(100cqw, 100cqh * ${PHOTO_RATIO})`,
+  height: `max(100cqh, 100cqw / (${PHOTO_RATIO}))`,
+  // Crop mostly from the right and bottom, keeping the wall text in view.
+  left: `calc((100cqw - max(100cqw, 100cqh * ${PHOTO_RATIO})) * 0.3)`,
+  top: `calc((100cqh - max(100cqh, 100cqw / (${PHOTO_RATIO}))) * 0.2)`,
+};
+
+const wallWords = ["Strategy", "Creatives", "Performance", "Growth"];
+
+/**
+ * The Clickfield Media office: a cleaned photo of the studio wall with the welcome text set
+ * on it as real, sharp type (sizes in `cqw` are fractions of the photo's width).
+ */
+function BrandPanel() {
   return (
-    <div className="relative h-44 max-w-md" aria-hidden>
-      <div className="absolute top-0 left-0 w-72 -rotate-2 rounded-xl bg-white/[0.07] p-4 ring-1 ring-white/15 backdrop-blur">
-        <p className="text-sm font-medium">Develop the Company Landing Page</p>
-        <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-400/15 px-2 py-0.5 text-emerald-300">
-            <CheckCircle2 className="size-3" /> Completed
-          </span>
-          <span className="text-white/60">On time</span>
+    <aside className="relative hidden overflow-hidden bg-[#0a2541] [container-type:size] lg:block">
+      <div className="absolute [container-type:inline-size]" style={stage}>
+        <Image
+          src={officePhoto}
+          alt=""
+          fill
+          priority
+          quality={90}
+          placeholder="blur"
+          sizes="75vw"
+          className="object-cover"
+        />
+
+        {/* Product logo, top-left of the wall. */}
+        <div className="absolute top-[11.6%] left-[19.1%] flex items-center gap-[1.9cqw] text-white">
+          <BrandMark className="size-[6.8cqw] shadow-[0_0.6cqw_2cqw_rgb(0_0_0/0.35)] ring-0" />
+          <div className="grid gap-[0.3cqw] leading-none">
+            <span className="text-[2.75cqw] font-semibold tracking-tight">{APP_NAME}</span>
+            <span className="text-[1.65cqw] text-white/75">by {COMPANY_NAME}</span>
+          </div>
+        </div>
+
+        {/* Welcome headline. */}
+        <div className="absolute top-[26.4%] left-[19.6%] text-white [text-shadow:0_0.15cqw_0_rgb(0_0_0/0.18),0_0.8cqw_3cqw_rgb(0_0_0/0.3)]">
+          <h1 className="font-heading text-[5.25cqw] leading-[1.05] font-bold tracking-[-0.025em]">
+            Welcome to
+            <br />
+            Clickfield <span className="text-brand-orange">Media</span>
+          </h1>
+          <p className="mt-[1.1cqw] text-[2.7cqw] font-light text-white/90">Your workspace</p>
+          <div className="mt-[2.2cqw] h-[0.5cqw] w-[5.2cqw] rounded-full bg-brand-orange" />
+        </div>
+
+        {/* Words on the wall. */}
+        <div className="absolute top-[21.8%] left-[65.2%]" aria-hidden>
+          <ul className="space-y-[0.5cqw] text-[2.7cqw] leading-[1.2] font-medium tracking-tight text-white/70 [text-shadow:0_0.6cqw_2cqw_rgb(0_0_0/0.25)]">
+            {wallWords.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+          <div className="mt-[2cqw] h-[0.45cqw] w-[4.3cqw] rounded-full bg-brand-orange" />
+        </div>
+
+        {/* Poster in the frame on the sideboard. */}
+        <div
+          className="absolute top-[47.2%] left-[77.7%] text-[1.78cqw] leading-[1.17] font-semibold tracking-tight text-[#0a2541]"
+          aria-hidden
+        >
+          Real
+          <br />
+          Estate
+          <br />
+          Marketing
+          <br />
+          That
+          <br />
+          <span className="text-brand-orange">Delivers.</span>
+          <div className="mt-[1cqw] h-[0.2cqw] w-[2.2cqw] bg-brand-orange" />
         </div>
       </div>
-      <div className="absolute top-20 left-16 w-72 rotate-1 rounded-xl bg-white/[0.1] p-4 shadow-2xl ring-1 ring-white/20 backdrop-blur">
-        <p className="text-sm font-medium">Prepare Q3 client report</p>
-        <div className="mt-3 flex items-center justify-between text-xs">
-          <span className="inline-flex items-center gap-1 rounded-full bg-sky-400/15 px-2 py-0.5 text-sky-300">
-            <CircleDot className="size-3" /> In progress
-          </span>
-          <span className="inline-flex items-center gap-1 text-brand-orange">
-            <Clock className="size-3" /> Due in 2 days
-          </span>
-        </div>
-      </div>
-      <div className="absolute top-2 left-[19rem] hidden w-28 rounded-xl bg-brand-orange p-3 text-center shadow-xl xl:block">
-        <p className="text-2xl font-bold">92%</p>
-        <p className="text-[11px] text-white/85">on-time rate</p>
-      </div>
-    </div>
+
+      {/* Finish: soft vignette, fine film grain and a shadow where the photo meets the form. */}
+      <div
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_40%_35%,transparent_55%,rgb(4_14_28/0.4)_100%)]"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-0 opacity-[0.07] mix-blend-overlay"
+        style={{ backgroundImage: GRAIN }}
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-black/20 to-transparent"
+        aria-hidden
+      />
+    </aside>
   );
 }
+
+const GRAIN = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`;

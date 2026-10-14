@@ -13,6 +13,7 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "make-admin": "tsx scripts/make-admin.ts",
+    "replace-owner": "tsx scripts/replace-owner.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:db": "node scripts/setup-test-db.mjs"

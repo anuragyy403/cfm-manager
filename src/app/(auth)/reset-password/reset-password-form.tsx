@@ -7,7 +7,7 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
 import { newPasswordSchema } from "@/lib/validation";
 
@@ -78,10 +78,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
           )}
           <Field data-invalid={!!fieldErrors.newPassword}>
             <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-            <Input
+            <PasswordInput
               id="newPassword"
               name="newPassword"
-              type="password"
               autoComplete="new-password"
               autoFocus
               aria-invalid={!!fieldErrors.newPassword}
@@ -94,10 +93,9 @@ export function ResetPasswordForm({ token }: { token: string }) {
           </Field>
           <Field data-invalid={!!fieldErrors.confirmPassword}>
             <FieldLabel htmlFor="confirmPassword">Confirm new password</FieldLabel>
-            <Input
+            <PasswordInput
               id="confirmPassword"
               name="confirmPassword"
-              type="password"
               autoComplete="new-password"
               aria-invalid={!!fieldErrors.confirmPassword}
             />

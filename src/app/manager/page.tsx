@@ -4,7 +4,7 @@ import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, CircleDot, Clipboar
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GettingStarted } from "@/components/getting-started";
 import { EmptyIllustration } from "@/components/illustrations";
-import { ProgressRing } from "@/components/progress-ring";
+import { Gauge } from "@/components/analytics/gauge";
 import { StatCard } from "@/components/stat-card";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { TaskListItem } from "@/components/tasks/task-list-item";
@@ -79,7 +79,7 @@ export default async function ManagerOverviewPage() {
         actions={
           <>
             <NewTaskButton teams={assignable} base="/manager" />
-            <Button asChild variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white">
+            <Button asChild variant="outline">
               <Link href="/manager/tasks?layout=board">
                 <KanbanSquare />
                 Task board
@@ -87,7 +87,7 @@ export default async function ManagerOverviewPage() {
             </Button>
           </>
         }
-        aside={<ProgressRing value={m.completionRate} size={112} label="team completion" />}
+        aside={<Gauge value={m.completionRate} label="Team completion" detail={`${m.completed} of ${m.total} tasks done`} />}
       />
 
       <GettingStarted
@@ -124,7 +124,7 @@ export default async function ManagerOverviewPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+        <div className="min-w-0 space-y-6 xl:col-span-2">
           <MyWorkCard tasks={myOpen} overdue={myOverdue} />
 
           <Card>
@@ -242,7 +242,7 @@ function MyWorkCard({ tasks, overdue }: { tasks: Awaited<ReturnType<typeof listM
     <Card className="border-brand-orange/30">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Briefcase className="size-5 text-brand-orange" /> My work
+          <Briefcase className="size-5 text-sun-deep" /> My work
         </CardTitle>
         <CardDescription>
           {tasks.length === 0

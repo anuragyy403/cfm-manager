@@ -15,6 +15,7 @@ import {
   FieldLabel,
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
 
 const signUpSchema = z
@@ -128,12 +129,12 @@ export function SignUpForm() {
           </Field>
           <Field data-invalid={!!fieldErrors.password}>
             <FieldLabel htmlFor="password">Password</FieldLabel>
-            <Input id="password" name="password" type="password" autoComplete="new-password" aria-invalid={!!fieldErrors.password} />
+            <PasswordInput id="password" name="password" autoComplete="new-password" aria-invalid={!!fieldErrors.password} />
             <FieldError>{fieldErrors.password}</FieldError>
           </Field>
           <Field data-invalid={!!fieldErrors.confirmPassword}>
             <FieldLabel htmlFor="confirmPassword">Confirm password</FieldLabel>
-            <Input id="confirmPassword" name="confirmPassword" type="password" autoComplete="new-password" aria-invalid={!!fieldErrors.confirmPassword} />
+            <PasswordInput id="confirmPassword" name="confirmPassword" autoComplete="new-password" aria-invalid={!!fieldErrors.confirmPassword} />
             <FieldError>{fieldErrors.confirmPassword}</FieldError>
           </Field>
           <Button type="submit" className="w-full" disabled={pending}>

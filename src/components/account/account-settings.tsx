@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { PasswordInput } from "@/components/ui/password-input";
 import { authClient } from "@/lib/auth-client";
 import { changePasswordSchema, profileSchema } from "@/lib/validation";
 
@@ -25,7 +26,7 @@ export function AccountSettings({ user }: { user: AccountUser }) {
 
 function CardIcon({ icon: Icon }: { icon: typeof UserRound }) {
   return (
-    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange-soft text-brand-orange">
+    <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-brand-orange-soft text-sun-deep">
       <Icon className="size-[18px]" />
     </span>
   );
@@ -161,10 +162,9 @@ function PasswordCard() {
             )}
             <Field data-invalid={!!fieldErrors.currentPassword}>
               <FieldLabel htmlFor="currentPassword">Current password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="currentPassword"
                 name="currentPassword"
-                type="password"
                 autoComplete="current-password"
                 aria-invalid={!!fieldErrors.currentPassword}
               />
@@ -172,10 +172,9 @@ function PasswordCard() {
             </Field>
             <Field data-invalid={!!fieldErrors.newPassword}>
               <FieldLabel htmlFor="newPassword">New password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="newPassword"
                 name="newPassword"
-                type="password"
                 autoComplete="new-password"
                 aria-invalid={!!fieldErrors.newPassword}
               />
@@ -187,10 +186,9 @@ function PasswordCard() {
             </Field>
             <Field data-invalid={!!fieldErrors.confirmPassword}>
               <FieldLabel htmlFor="confirmPassword">Confirm new password</FieldLabel>
-              <Input
+              <PasswordInput
                 id="confirmPassword"
                 name="confirmPassword"
-                type="password"
                 autoComplete="new-password"
                 aria-invalid={!!fieldErrors.confirmPassword}
               />

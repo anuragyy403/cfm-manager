@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { EmptyIllustration } from "@/components/illustrations";
-import { ProgressRing } from "@/components/progress-ring";
+import { Gauge } from "@/components/analytics/gauge";
 import { StatCard } from "@/components/stat-card";
 import { TaskListItem } from "@/components/tasks/task-list-item";
 import { Button } from "@/components/ui/button";
@@ -84,7 +84,7 @@ export default async function MemberDashboardPage() {
             </Link>
           </Button>
         }
-        aside={tasks.length > 0 && <ProgressRing value={m.completionRate} size={112} label="completed" />}
+        aside={tasks.length > 0 && <Gauge value={m.completionRate} label="My completion" detail={`${m.completed} of ${m.total} tasks done`} />}
       />
 
       {tasks.length === 0 ? (
@@ -107,11 +107,11 @@ export default async function MemberDashboardPage() {
           </div>
 
           <div className="grid gap-6 xl:grid-cols-3">
-            <div className="space-y-6 xl:col-span-2">
+            <div className="min-w-0 space-y-6 xl:col-span-2">
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
-                    <Sun className="size-5 text-brand-orange" /> My day
+                    <Sun className="size-5 text-sun-deep" /> My day
                   </CardTitle>
                   <CardDescription>What to work on, most urgent first.</CardDescription>
                   <CardAction>
@@ -132,7 +132,7 @@ export default async function MemberDashboardPage() {
                   ) : (
                     <>
                       <TaskGroup title="Overdue" icon={AlertTriangle} tone="text-red-600" tasks={overdue} />
-                      <TaskGroup title="Due today" icon={Clock} tone="text-brand-orange" tasks={today} />
+                      <TaskGroup title="Due today" icon={Clock} tone="text-sun-deep" tasks={today} />
                       <TaskGroup title="This week" icon={CalendarClock} tone="text-sky-600" tasks={week} />
                       <TaskGroup title="Later" icon={CalendarDays} tone="text-muted-foreground" tasks={later} />
                     </>
@@ -149,7 +149,7 @@ export default async function MemberDashboardPage() {
                 <CardContent className="space-y-5">
                   {streak > 0 && (
                     <div className="flex items-center gap-3 rounded-xl bg-brand-orange-soft p-3">
-                      <div className="flex size-10 items-center justify-center rounded-full bg-brand-orange text-white">
+                      <div className="flex size-10 items-center justify-center rounded-full bg-sun text-[#1f1e1b]">
                         <Flame className="size-5" />
                       </div>
                       <div className="text-sm">

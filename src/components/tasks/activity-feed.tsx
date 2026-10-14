@@ -45,7 +45,7 @@ const badgeTone: Record<TaskActivityType, string> = {
   REOPENED: "bg-amber-500 text-white",
   ARCHIVED: "bg-slate-400 text-white",
   RESTORED: "bg-slate-500 text-white",
-  SUBTASK_ADDED: "bg-brand-orange text-white",
+  SUBTASK_ADDED: "bg-sun text-[#1f1e1b]",
 };
 
 type Details = {

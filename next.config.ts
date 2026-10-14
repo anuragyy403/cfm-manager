@@ -11,6 +11,8 @@ const nextConfig: NextConfig = {
   // Every page in CFM Workplace is per-user and live, so Cache Components /
   // partial prefetching are left off and pages render dynamically per request.
   poweredByHeader: false,
+  // 90 is used for the sign-in office photo, where 75 visibly softens the detail.
+  images: { qualities: [75, 90] },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

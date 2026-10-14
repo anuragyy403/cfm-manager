@@ -10,11 +10,18 @@
   --color-brand-orange: var(--brand-orange);
   --color-brand-orange-hover: var(--brand-orange-hover);
   --color-brand-orange-soft: var(--brand-orange-soft);
+  --color-sun: var(--sun-yellow);
+  --color-sun-soft: var(--sun-yellow-soft);
+  --color-sun-deep: var(--sun-yellow-ink);
+  --color-ink: var(--sun-ink);
+  --color-sun-line: var(--sun-line);
+  --color-sun-surface: var(--sun-surface);
+  --color-sun-raised: var(--sun-raised);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-display);
+  --font-heading: var(--font-sans);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -53,99 +60,148 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * "Sunlit" theme: warm cream surfaces, sunflower-yellow highlights and
+ * charcoal ink, used across the whole app.
+ *
+ * The older brand token names are kept and re-pointed so existing classes
+ * follow the theme: "navy" is now charcoal ink and "orange" is the sunflower
+ * yellow (fills only; `-hover` is a deep mustard that is safe for text).
+ *
+ * Chart slots: yellow / charcoal / gray / red, checked for colour-blind
+ * separation in both modes, and always shown with a visible label.
+ */
 :root {
-  /* Clickfieldmedia brand (from the logo) */
-  --brand-navy: #0c243e;
-  --brand-navy-soft: #16365a;
-  --brand-orange: #e65e15;
-  --brand-orange-hover: #cc5211;
-  --brand-orange-soft: #fdf0e8;
+  --sun-yellow: #f5c127;
+  --sun-yellow-soft: #fbedbd;
+  --sun-yellow-ink: #8a6400;
+  --sun-ink: #22211d;
+  --sun-charcoal: #2b2a26;
+  --sun-gray: #9c978c;
+  --sun-red: #d9534a;
+  --sun-track: #ece6d6;
+  --sun-surface: #fbf8f0;
+  --sun-raised: #fffdf8;
+  --sun-line: #e9e2d0;
+  --sun-panel: radial-gradient(1200px 560px at 92% -10%, #f8e6a2 0%, rgb(248 230 162 / 0%) 60%),
+    radial-gradient(900px 500px at -10% 110%, #f6efd9 0%, rgb(246 239 217 / 0%) 60%),
+    linear-gradient(180deg, #f3f0e8 0%, #efebe1 100%);
+  --sun-hero: linear-gradient(105deg, #f8f5ee 0%, #f8f0d6 55%, #f8e39a 100%);
+  --sun-highlight: linear-gradient(180deg, #fbe39a 0%, #fbf3d8 100%);
+  --sun-shadow: 0 1px 2px rgb(70 55 20 / 5%), 0 12px 32px -18px rgb(70 55 20 / 22%);
 
-  --background: #f6f7f9;
-  --foreground: #0f1b2a;
-  --card: #ffffff;
-  --card-foreground: #0f1b2a;
-  --popover: #ffffff;
-  --popover-foreground: #0f1b2a;
-  --primary: var(--brand-navy);
+  --brand-navy: var(--sun-ink);
+  --brand-navy-soft: #3a3832;
+  --brand-orange: var(--sun-yellow);
+  --brand-orange-hover: var(--sun-yellow-ink);
+  --brand-orange-soft: var(--sun-yellow-soft);
+
+  --background: #f2efe7;
+  --foreground: #1f1e1b;
+  --card: var(--sun-surface);
+  --card-foreground: #1f1e1b;
+  --popover: var(--sun-raised);
+  --popover-foreground: #1f1e1b;
+  --primary: var(--sun-ink);
   --primary-foreground: #ffffff;
-  --secondary: #eef1f5;
-  --secondary-foreground: #0f1b2a;
-  --muted: #eef1f5;
-  --muted-foreground: #5f6b7a;
-  --accent: #eaf0f7;
-  --accent-foreground: #0f1b2a;
+  --secondary: #efe9da;
+  --secondary-foreground: #1f1e1b;
+  --muted: #f1ecdf;
+  --muted-foreground: #78736a;
+  --accent: #f3edd9;
+  --accent-foreground: #1f1e1b;
   --destructive: oklch(0.577 0.245 27.325);
-  --border: #e3e7ed;
-  --input: #dde2ea;
-  --ring: rgb(230 94 21 / 55%);
-  --chart-1: oklch(0.546 0.215 263);
-  --chart-2: oklch(0.6 0.15 163);
-  --chart-3: oklch(0.75 0.16 70);
-  --chart-4: oklch(0.6 0.21 25);
-  --chart-5: oklch(0.65 0.12 230);
-  --radius: 0.625rem;
-  /* Data-viz categorical slots (fixed order, validated for CVD) and chart chrome */
+  --border: var(--sun-line);
+  --input: #e3dccb;
+  --ring: rgb(245 193 39 / 65%);
+  --chart-1: #f5c127;
+  --chart-2: #2b2a26;
+  --chart-3: #9c978c;
+  --chart-4: #d9534a;
+  --chart-5: #c9a24a;
+  --radius: 0.75rem;
   --series-1: #2a78d6;
   --series-2: #eb6834;
   --series-3: #1baf7a;
   --series-4: #eda100;
-  --chart-grid: #e1e0d9;
-  --chart-axis: #898781;
-  /* Navy sidebar with orange highlights */
-  --sidebar: var(--brand-navy);
-  --sidebar-foreground: #dbe3ee;
-  --sidebar-primary: var(--brand-orange);
+  --chart-grid: #ebe5d6;
+  --chart-axis: #8d887d;
+  /* Warm "dusk" sidebar: dark in both modes, frosted tiles, charcoal active tile. */
+  --sidebar: #2e2a26;
+  --sidebar-foreground: #f1ece2;
+  --sidebar-primary: #151412;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: rgb(255 255 255 / 9%);
+  --sidebar-accent: rgb(255 255 255 / 8%);
   --sidebar-accent-foreground: #ffffff;
-  --sidebar-border: rgb(255 255 255 / 9%);
-  --sidebar-ring: var(--brand-orange);
+  --sidebar-border: rgb(255 255 255 / 10%);
+  --sidebar-ring: var(--sun-yellow);
+  --sidebar-panel: radial-gradient(420px 320px at 0% 0%, rgb(255 236 200 / 9%) 0%, rgb(255 236 200 / 0%) 70%),
+    linear-gradient(180deg, #423c35 0%, #332f2a 45%, #26231f 100%);
 }
 
 .dark {
-  --brand-navy: #0c243e;
-  --brand-navy-soft: #16365a;
-  --brand-orange: #f07a3a;
-  --brand-orange-hover: #e65e15;
-  --brand-orange-soft: #3a2316;
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.62 0.19 264);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  --sun-yellow: #f5c127;
+  --sun-yellow-soft: #4a3d14;
+  --sun-yellow-ink: #f8d76a;
+  --sun-ink: #f4f1e8;
+  --sun-charcoal: #e9e4d6;
+  --sun-gray: #5b5850;
+  --sun-red: #f0776a;
+  --sun-track: #34312a;
+  --sun-surface: #23211b;
+  --sun-raised: #2a2720;
+  --sun-line: #36332b;
+  --sun-panel: radial-gradient(1200px 560px at 92% -10%, rgb(245 193 39 / 14%) 0%, rgb(245 193 39 / 0%) 60%),
+    linear-gradient(180deg, #1a1915 0%, #171612 100%);
+  --sun-hero: linear-gradient(105deg, #23211b 0%, #2a2618 60%, #3a3115 100%);
+  --sun-highlight: linear-gradient(180deg, #4a3d14 0%, #2a2720 100%);
+  --sun-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 12px 32px -18px rgb(0 0 0 / 60%);
+
+  --brand-navy: #2e2b23;
+  --brand-navy-soft: #3a372e;
+  --brand-orange: var(--sun-yellow);
+  --brand-orange-hover: var(--sun-yellow-ink);
+  --brand-orange-soft: var(--sun-yellow-soft);
+
+  --background: #171612;
+  --foreground: #f4f1e8;
+  --card: var(--sun-surface);
+  --card-foreground: #f4f1e8;
+  --popover: var(--sun-raised);
+  --popover-foreground: #f4f1e8;
+  --primary: #f4f1e8;
+  --primary-foreground: #1f1e1b;
+  --secondary: #2e2b23;
+  --secondary-foreground: #f4f1e8;
+  --muted: #2e2b23;
+  --muted-foreground: #a8a397;
+  --accent: #2e2b23;
+  --accent-foreground: #f4f1e8;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.62 0.19 264 / 60%);
-  --chart-1: oklch(0.65 0.19 264);
-  --chart-2: oklch(0.7 0.15 163);
-  --chart-3: oklch(0.8 0.15 75);
-  --chart-4: oklch(0.68 0.19 25);
-  --chart-5: oklch(0.72 0.12 230);
+  --border: var(--sun-line);
+  --input: #3a372e;
+  --ring: rgb(245 193 39 / 60%);
+  --chart-1: #f5c127;
+  --chart-2: #e9e4d6;
+  --chart-3: #5b5850;
+  --chart-4: #f0776a;
+  --chart-5: #c9a24a;
   --series-1: #3987e5;
   --series-2: #d95926;
   --series-3: #199e70;
   --series-4: #c98500;
-  --chart-grid: #2c2c2a;
-  --chart-axis: #898781;
-  --sidebar: #0a1d33;
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: var(--brand-orange);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --chart-grid: #34312a;
+  --chart-axis: #8d887d;
+  --sidebar: #22201c;
+  --sidebar-foreground: #f1ece2;
+  --sidebar-primary: #0f0e0c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: rgb(255 255 255 / 7%);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 8%);
+  --sidebar-ring: var(--sun-yellow);
+  --sidebar-panel: radial-gradient(420px 320px at 0% 0%, rgb(255 236 200 / 6%) 0%, rgb(255 236 200 / 0%) 70%),
+    linear-gradient(180deg, #302b26 0%, #25221e 45%, #1c1a17 100%);
 }
 
 @layer base {
@@ -160,5 +216,9 @@
   }
   html {
     @apply font-sans;
+  }
+  /* Dusk gradient: the desktop panel and the phone sheet both carry data-sidebar="sidebar". */
+  [data-sidebar="sidebar"] {
+    background: var(--sidebar-panel);
   }
 }

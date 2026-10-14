@@ -14,7 +14,7 @@ import {
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GettingStarted } from "@/components/getting-started";
 import { EmptyIllustration } from "@/components/illustrations";
-import { ProgressRing } from "@/components/progress-ring";
+import { Gauge } from "@/components/analytics/gauge";
 import { StatCard } from "@/components/stat-card";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { TaskListItem } from "@/components/tasks/task-list-item";
@@ -99,7 +99,7 @@ export default async function OwnerOverviewPage() {
             ) : (
               <NewTaskButton teams={assignable} base="/admin" />
             )}
-            <Button asChild variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white">
+            <Button asChild variant="outline">
               <Link href="/admin/tasks?layout=board">
                 <KanbanSquare />
                 Task board
@@ -107,7 +107,7 @@ export default async function OwnerOverviewPage() {
             </Button>
           </>
         }
-        aside={teams.length > 0 && <ProgressRing value={m.completionRate} size={112} label="company completion" />}
+        aside={teams.length > 0 && <Gauge value={m.completionRate} label="Company completion" detail={`${m.completed} of ${m.total} tasks done`} />}
       />
 
       <GettingStarted steps={steps} />
@@ -128,7 +128,7 @@ export default async function OwnerOverviewPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <div className="space-y-6 xl:col-span-2">
+        <div className="min-w-0 space-y-6 xl:col-span-2">
           <Card>
             <CardHeader>
               <CardTitle>Teams at a glance</CardTitle>
@@ -244,17 +244,17 @@ export default async function OwnerOverviewPage() {
                   or from a team&apos;s page.
                 </p>
               ) : (
-                <ul className="divide-y">
+                <ul className="-mx-2 divide-y divide-sun-line/70">
                   {managers.map((p) => {
                     const pm = p.metrics;
                     return (
-                      <li key={p.id}>
+                      <li key={p.id} className="py-1.5 first:pt-0 last:pb-0">
                         <Link
                           href={`/admin/people/${p.id}`}
-                          className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:underline"
+                          className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-sun-raised"
                         >
                           <UserAvatar name={p.name} id={p.id} />
-                          <div className="grid min-w-0 flex-1 leading-tight">
+                          <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
                             <span className="truncate font-medium">{p.name}</span>
                             <span className="truncate text-xs text-muted-foreground">
                               {p.managedTeams.length ? p.managedTeams.map((t) => t.name).join(", ") : "No team yet"}

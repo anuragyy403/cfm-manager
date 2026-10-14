@@ -1,7 +1,7 @@
 import { APP_TIMEZONE } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
-function greeting() {
+export function greeting() {
   const hour = Number(
     new Intl.DateTimeFormat("en-GB", { hour: "numeric", hour12: false, timeZone: APP_TIMEZONE }).format(new Date()),
   );
@@ -11,7 +11,7 @@ function greeting() {
   return "Good evening";
 }
 
-function today() {
+export function today() {
   return new Intl.DateTimeFormat("en-GB", {
     weekday: "long",
     day: "numeric",
@@ -20,47 +20,50 @@ function today() {
   }).format(new Date());
 }
 
-/** Navy hero banner with a time-of-day greeting, used at the top of both dashboards. */
+/**
+ * Warm hero at the top of each dashboard: time-of-day greeting, a one-line
+ * summary, actions, and an optional visual on the right (e.g. a gauge).
+ */
 export function WelcomeBanner({
   name,
   subtitle,
   actions,
   aside,
+  children,
   className,
 }: {
   name: string;
   subtitle?: React.ReactNode;
   actions?: React.ReactNode;
-  /** Right-hand visual, e.g. a progress ring. */
+  /** Right-hand visual, e.g. a gauge. */
   aside?: React.ReactNode;
+  /** Extra content under the greeting, e.g. headline figures. */
+  children?: React.ReactNode;
   className?: string;
 }) {
   return (
     <section
       className={cn(
-        "relative mb-6 overflow-hidden rounded-2xl bg-brand-navy px-6 py-7 text-white shadow-lg shadow-brand-navy/10 sm:px-8",
+        "@container relative mb-6 overflow-hidden rounded-[1.75rem] border border-sun-line p-6 shadow-[var(--sun-shadow)] [background:var(--sun-hero)] sm:p-8",
         className,
       )}
     >
-      <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgb(230_94_21/0.28),transparent_55%)]" />
-      <div
-        className="pointer-events-none absolute -right-16 -bottom-20 size-64 rounded-full border-[36px] border-white/[0.04]"
-        aria-hidden
-      />
-      <div
-        className="pointer-events-none absolute inset-0 opacity-[0.06] [background-image:radial-gradient(white_1px,transparent_1px)] [background-size:20px_20px]"
-        aria-hidden
-      />
-      <div className="relative flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 space-y-2">
-          <p className="text-xs font-medium tracking-wider text-white/60 uppercase">{today()}</p>
-          <h1 className="font-heading text-2xl font-extrabold tracking-tight sm:text-4xl">
-            {greeting()}, <span className="text-brand-orange">{name.split(" ")[0]}</span>
+      <div className="grid items-center gap-6 @3xl:grid-cols-[1fr_auto]">
+        <div className="min-w-0">
+          <h1 className="text-3xl font-semibold tracking-[-0.03em] sm:text-[2.6rem] sm:leading-[1.1]">
+            {greeting()}, {name.split(" ")[0]}
           </h1>
-          {subtitle && <p className="max-w-xl text-sm text-white/75">{subtitle}</p>}
-          {actions && <div className="flex flex-wrap gap-2 pt-2">{actions}</div>}
+          <p className="mt-2 text-sm text-muted-foreground">It&apos;s {today()}</p>
+          {subtitle && <p className="mt-3 max-w-2xl text-sm text-foreground/75">{subtitle}</p>}
+          {actions && <div className="mt-5 flex flex-wrap gap-2">{actions}</div>}
+          {children && (
+            <>
+              <div className="my-6 h-px max-w-xl bg-gradient-to-r from-sun-line to-transparent" />
+              {children}
+            </>
+          )}
         </div>
-        {aside && <div className="hidden shrink-0 sm:block">{aside}</div>}
+        {aside && <div className="mx-auto hidden w-full max-w-[280px] sm:block @3xl:w-[280px]">{aside}</div>}
       </div>
     </section>
   );
