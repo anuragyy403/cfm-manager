@@ -2,14 +2,17 @@
  * Development seed for CFM Workplace.
  *
  * Wipes the local database and creates:
- *   - 1 admin account
- *   - 8 team members in "CFM Core Team"
- *   - 2 registered users who are NOT on the team (to test member search)
+ *   - the owner (admin@cfm.test)
+ *   - 2 managers: rahul@cfm.test runs "Tech team", divya@cfm.test runs "Business team"
+ *   - 8 employees split across the two teams
+ *   - 2 registered employees who are NOT on a team yet (to test search)
  *   - a spread of tasks in every state (pending, in progress, completed on
- *     time, completed late, overdue) so the dashboards and analytics have data.
+ *     time, completed late, overdue), plus work the owner gave each manager
+ *     that the manager split into subtasks, so every dashboard has data.
  *
  * Every seeded account uses the password in SEED_PASSWORD below.
- * Sign in with admin@cfm.test (admin) or e.g. aarav@cfm.test (member).
+ * Sign in as admin@cfm.test (owner), rahul@cfm.test (manager) or
+ * e.g. aarav@cfm.test (employee).
  *
  * Refuses to run against anything except a local database.
  */
@@ -48,9 +51,26 @@ const now = Date.now();
 const at = (daysFromNow: number, hoursOffset = 0) =>
   new Date(now + daysFromNow * DAY + hoursOffset * HOUR);
 
-type SeedUser = { name: string; username: string; role?: "ADMIN" | "MEMBER" };
+type SeedUser = { name: string; username: string; role?: "ADMIN" | "MANAGER" | "MEMBER" };
 
-const admin: SeedUser = { name: "CFM Admin", username: "admin", role: "ADMIN" };
+const admin: SeedUser = { name: "CFM Owner", username: "admin", role: "ADMIN" };
+
+const managers: SeedUser[] = [
+  { name: "Rahul Khanna", username: "rahul", role: "MANAGER" },
+  { name: "Divya Menon", username: "divya", role: "MANAGER" },
+];
+
+/** Which team each employee is on. */
+const TEAM_OF: Record<string, "tech" | "business"> = {
+  aarav: "tech",
+  rohan: "tech",
+  vikram: "tech",
+  neha: "tech",
+  priya: "business",
+  ananya: "business",
+  sneha: "business",
+  karan: "business",
+};
 
 const members: SeedUser[] = [
   { name: "Aarav Sharma", username: "aarav" },
@@ -135,6 +155,92 @@ const tasks: SeedTask[] = [
   { title: "Quarterly inventory reconciliation", description: "Reconcile stock counts with the accounting system.", assignee: "karan", priority: "URGENT", status: "IN_PROGRESS", assignedDaysAgo: 8, dueInDays: -3, startedDaysAgo: 6 },
 ];
 
+type Activity = {
+  actorId: string;
+  type: "CREATED" | "STARTED" | "COMPLETED" | "SUBTASK_ADDED";
+  fromStatus?: TaskStatus;
+  toStatus?: TaskStatus;
+  details?: object;
+  createdAt: Date;
+};
+
+async function createSeedTask(
+  t: SeedTask,
+  ids: { teamId: string; assigneeId: string; createdById: string; parentId?: string },
+) {
+  const assignedAt = at(-t.assignedDaysAgo);
+  const startedAt = t.startedDaysAgo !== undefined ? at(-t.startedDaysAgo) : null;
+  const completedAt = t.completedDaysAgo !== undefined ? at(-t.completedDaysAgo) : null;
+
+  const activities: Activity[] = [
+    { actorId: ids.createdById, type: "CREATED", toStatus: "PENDING", createdAt: assignedAt },
+  ];
+  if (startedAt) {
+    activities.push({ actorId: ids.assigneeId, type: "STARTED", fromStatus: "PENDING", toStatus: "IN_PROGRESS", createdAt: startedAt });
+  }
+  if (completedAt) {
+    activities.push({ actorId: ids.assigneeId, type: "COMPLETED", fromStatus: startedAt ? "IN_PROGRESS" : "PENDING", toStatus: "COMPLETED", createdAt: completedAt });
+  }
+
+  const task = await prisma.task.create({
+    data: {
+      title: t.title,
+      description: t.description,
+      priority: t.priority,
+      status: t.status,
+      dueAt: at(t.dueInDays),
+      teamId: ids.teamId,
+      parentId: ids.parentId ?? null,
+      assigneeId: ids.assigneeId,
+      createdById: ids.createdById,
+      assignedAt,
+      startedAt,
+      completedAt,
+      completionNote: t.completionNote ?? null,
+      createdAt: assignedAt,
+      activities: { create: activities },
+    },
+  });
+  if (ids.parentId) {
+    await prisma.taskActivity.create({
+      data: {
+        taskId: ids.parentId,
+        actorId: ids.createdById,
+        type: "SUBTASK_ADDED",
+        details: { subtaskId: task.id, title: task.title, assigneeId: task.assigneeId },
+        createdAt: assignedAt,
+      },
+    });
+  }
+  return task;
+}
+
+/** Work the owner gives each manager, which the manager splits into subtasks. */
+const delegated: { team: "tech" | "business"; task: SeedTask; subtasks: SeedTask[] }[] = [
+  {
+    team: "tech",
+    task: { title: "Launch the new client portal", description: "Customers log in to see their reports and invoices. Target: live before the client review.", assignee: "rahul", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 6, dueInDays: 9, startedDaysAgo: 5 },
+    subtasks: [
+      { title: "Portal: login and accounts", description: "Email + password login for client users, with password reset.", assignee: "aarav", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 5, dueInDays: 4, startedDaysAgo: 3 },
+      { title: "Portal: reports API", description: "Endpoints for monthly reports and invoices.", assignee: "rohan", priority: "MEDIUM", status: "PENDING", assignedDaysAgo: 5, dueInDays: 6 },
+      { title: "Portal: QA test plan", description: "Write the test plan and acceptance checklist.", assignee: "vikram", priority: "MEDIUM", status: "COMPLETED", assignedDaysAgo: 5, dueInDays: 1, startedDaysAgo: 4, completedDaysAgo: 2, completionNote: "Test plan shared in the drive; 42 cases." },
+    ],
+  },
+  {
+    team: "business",
+    task: { title: "Q4 sales strategy", description: "Targets, pricing and the campaign plan for Q4. Present it at the monthly review.", assignee: "divya", priority: "URGENT", status: "PENDING", assignedDaysAgo: 3, dueInDays: 5 },
+    subtasks: [
+      { title: "Competitor pricing research", description: "Compare our packages with the top five competitors.", assignee: "priya", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 2, dueInDays: 2, startedDaysAgo: 1 },
+      { title: "Draft the Q4 campaign calendar", description: "Channels, dates and budget per campaign.", assignee: "karan", priority: "MEDIUM", status: "PENDING", assignedDaysAgo: 2, dueInDays: 4 },
+    ],
+  },
+];
+
+/** Assigned by the owner straight to an employee, skipping the manager. */
+const ownerDirect: SeedTask[] = [
+  { title: "Renew the office lease", description: "Negotiate the renewal with the landlord; aim for a 2-year term.", assignee: "sneha", priority: "HIGH", status: "PENDING", assignedDaysAgo: 1, dueInDays: 10 },
+];
+
 async function main() {
   console.log("Clearing existing data…");
   await prisma.taskActivity.deleteMany();
@@ -149,76 +255,52 @@ async function main() {
   const passwordHash = await hashPassword(SEED_PASSWORD);
 
   console.log("Creating users…");
-  const adminUser = await createUser(admin, passwordHash);
+  const ownerUser = await createUser(admin, passwordHash);
   const byUsername = new Map<string, string>();
-  for (const m of [...members, ...outsiders]) {
+  for (const m of [...managers, ...members, ...outsiders]) {
     const user = await createUser(m, passwordHash);
     byUsername.set(m.username, user.id);
   }
+  const id = (username: string) => byUsername.get(username)!;
 
-  console.log("Creating team…");
-  const team = await prisma.team.create({
-    data: {
-      name: "CFM Core Team",
-      description: "Main delivery team",
-      ownerId: adminUser.id,
-      members: {
-        create: members.map((m) => ({
-          userId: byUsername.get(m.username)!,
-          addedById: adminUser.id,
-          joinedAt: at(-30),
-        })),
-      },
-    },
-  });
-
-  console.log("Creating tasks…");
-  for (const t of tasks) {
-    const assigneeId = byUsername.get(t.assignee)!;
-    const assignedAt = at(-t.assignedDaysAgo);
-    const startedAt =
-      t.startedDaysAgo !== undefined ? at(-t.startedDaysAgo) : null;
-    const completedAt =
-      t.completedDaysAgo !== undefined ? at(-t.completedDaysAgo) : null;
-
-    const activities: {
-      actorId: string;
-      type: "CREATED" | "STARTED" | "COMPLETED";
-      fromStatus?: TaskStatus;
-      toStatus?: TaskStatus;
-      createdAt: Date;
-    }[] = [
-      { actorId: adminUser.id, type: "CREATED", toStatus: "PENDING", createdAt: assignedAt },
-    ];
-    if (startedAt) {
-      activities.push({ actorId: assigneeId, type: "STARTED", fromStatus: "PENDING", toStatus: "IN_PROGRESS", createdAt: startedAt });
-    }
-    if (completedAt) {
-      activities.push({ actorId: assigneeId, type: "COMPLETED", fromStatus: "IN_PROGRESS", toStatus: "COMPLETED", createdAt: completedAt });
-    }
-
-    await prisma.task.create({
-      data: {
-        title: t.title,
-        description: t.description,
-        priority: t.priority,
-        status: t.status,
-        dueAt: at(t.dueInDays),
-        teamId: team.id,
-        assigneeId,
-        createdById: adminUser.id,
-        assignedAt,
-        startedAt,
-        completedAt,
-        completionNote: t.completionNote ?? null,
-        createdAt: assignedAt,
-        activities: { create: activities },
-      },
+  console.log("Creating teams…");
+  const teams = {
+    tech: await prisma.team.create({
+      data: { name: "Tech team", description: "Websites, apps and internal tools", managerId: id("rahul") },
+    }),
+    business: await prisma.team.create({
+      data: { name: "Business team", description: "Sales, clients, marketing and operations", managerId: id("divya") },
+    }),
+  };
+  for (const m of members) {
+    const team = teams[TEAM_OF[m.username]!];
+    await prisma.teamMember.create({
+      data: { teamId: team.id, userId: id(m.username), addedById: team.managerId, joinedAt: at(-30) },
     });
   }
 
+  console.log("Creating tasks…");
+  for (const t of tasks) {
+    const team = teams[TEAM_OF[t.assignee]!];
+    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: team.managerId });
+  }
+  let subtaskCount = 0;
+  for (const d of delegated) {
+    const team = teams[d.team];
+    const parent = await createSeedTask(d.task, { teamId: team.id, assigneeId: id(d.task.assignee), createdById: ownerUser.id });
+    for (const sub of d.subtasks) {
+      await createSeedTask(sub, { teamId: team.id, assigneeId: id(sub.assignee), createdById: team.managerId, parentId: parent.id });
+      subtaskCount++;
+    }
+  }
+  for (const t of ownerDirect) {
+    const team = teams[TEAM_OF[t.assignee]!];
+    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: ownerUser.id });
+  }
+
   console.log(
-    `Done: 1 admin, ${members.length} team members, ${outsiders.length} other users, ${tasks.length} tasks.`,
+    `Done: 1 owner, ${managers.length} managers, ${members.length} employees, ${outsiders.length} people without a team, ` +
+      `${tasks.length + delegated.length + ownerDirect.length} tasks and ${subtaskCount} subtasks.`,
   );
 }
 

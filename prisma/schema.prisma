@@ -15,8 +15,11 @@ datasource db {
 
 // ─── Enums ──────────────────────────────────────────────────────────────────
 
+/// ADMIN is the company owner (exactly one): sees and controls everything.
+/// MANAGER runs one or more teams. MEMBER is an employee on one team.
 enum Role {
   ADMIN
+  MANAGER
   MEMBER
 }
 
@@ -44,6 +47,7 @@ enum TaskActivityType {
   REOPENED
   ARCHIVED
   RESTORED
+  SUBTASK_ADDED
 }
 
 // ─── Auth (Better Auth) ─────────────────────────────────────────────────────
@@ -64,7 +68,7 @@ model User {
   sessions Session[]
   accounts Account[]
 
-  ownedTeams      Team[]         @relation("TeamOwner")
+  managedTeams    Team[]         @relation("TeamManager")
   memberships     TeamMember[]   @relation("MembershipUser")
   addedMembers    TeamMember[]   @relation("MembershipAddedBy")
   assignedTasks   Task[]         @relation("TaskAssignee")
@@ -137,15 +141,16 @@ model Team {
   id          String   @id @default(cuid())
   name        String
   description String?
-  ownerId     String
-  owner       User     @relation("TeamOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  /// The team's manager (a MANAGER, or the owner running a team directly).
+  managerId   String   @map("ownerId")
+  manager     User     @relation("TeamManager", fields: [managerId], references: [id], onDelete: Restrict)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   members TeamMember[]
   tasks   Task[]
 
-  @@index([ownerId])
+  @@index([managerId])
   @@map("teams")
 }
 
@@ -160,7 +165,8 @@ model TeamMember {
   joinedAt  DateTime @default(now())
 
   @@unique([teamId, userId])
-  @@index([userId])
+  /// An employee belongs to at most one team.
+  @@unique([userId])
   @@map("team_members")
 }
 
@@ -181,6 +187,12 @@ model Task {
   createdById    String
   createdBy      User         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
+  /// Set on a subtask: a manager splitting a bigger task among their team.
+  /// One level only (a subtask never has subtasks of its own).
+  parentId       String?
+  parent         Task?        @relation("Subtasks", fields: [parentId], references: [id], onDelete: Cascade)
+  subtasks       Task[]       @relation("Subtasks")
+
   // Lifecycle timestamps. Always set by the server, never by client input.
   assignedAt     DateTime     @default(now())
   startedAt      DateTime?
@@ -196,6 +208,7 @@ model Task {
   @@index([teamId, status])
   @@index([assigneeId, status])
   @@index([dueAt])
+  @@index([parentId])
   @@map("tasks")
 }
 

@@ -1,22 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, MessageSquareText } from "lucide-react";
+import { ArrowLeft, CornerDownRight, MessageSquareText } from "lucide-react";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { PriorityBadge, StatusBadge } from "@/components/tasks/badges";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
-import { requireMember } from "@/server/session";
+import { requireEmployee } from "@/server/session";
 import { getMyTask } from "@/server/tasks";
-import { MemberTaskActions } from "./member-task-actions";
+import { WorkActions } from "@/components/workspace/work-actions";
 
 export const metadata: Metadata = { title: "Task" };
 
-export default async function MemberTaskPage({ params }: PageProps<"/dashboard/tasks/[id]">) {
-  const member = await requireMember();
+export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard/tasks/[id]">) {
+  const employee = await requireEmployee();
   const { id } = await params;
-  const task = await getMyTask(member, id);
+  const task = await getMyTask(employee, id);
 
   return (
     <>
@@ -37,9 +37,15 @@ export default async function MemberTaskPage({ params }: PageProps<"/dashboard/t
           <p className="text-sm text-muted-foreground">
             Assigned by {task.createdBy.name} · {formatDateTime(task.assignedAt)}
           </p>
+          {task.parent && (
+            <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <CornerDownRight className="size-4" />
+              Part of <span className="font-medium text-foreground">{task.parent.title}</span>
+            </p>
+          )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <MemberTaskActions taskId={task.id} status={task.status} />
+          <WorkActions taskId={task.id} status={task.status} />
         </div>
       </div>
 

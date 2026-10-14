@@ -1,11 +1,12 @@
 /**
- * Grants the ADMIN role to an existing account.
+ * Makes an existing account the company owner (stored as the ADMIN role).
  *
  *   npm run make-admin -- someone@company.com
  *
- * This is the only way an account becomes an admin: the role can never be
- * chosen at sign-up. Run it from a machine that has the production
- * DATABASE_URL once the real admin has registered.
+ * This is the only way an account becomes the owner: the role can never be
+ * chosen at sign-up. There is exactly one owner, so this refuses while
+ * another account already has the role. Run it from a machine that has the
+ * production DATABASE_URL once the owner has registered.
  */
 import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
@@ -29,13 +30,21 @@ async function main() {
     return;
   }
   if (user.role === "ADMIN") {
-    console.log(`${email} is already an admin.`);
+    console.log(`${email} is already the owner.`);
     return;
   }
+  const existing = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { email: true } });
+  if (existing) {
+    console.error(`${existing.email} is already the owner. There can only be one.`);
+    process.exitCode = 1;
+    return;
+  }
+  // The owner is never an employee on a team.
+  await prisma.teamMember.deleteMany({ where: { userId: user.id } });
   await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
   // Drop existing sessions so the new role takes effect on next sign-in.
   await prisma.session.deleteMany({ where: { userId: user.id } });
-  console.log(`${email} is now an admin. They need to sign in again.`);
+  console.log(`${email} is now the owner. They need to sign in again.`);
 }
 
 main()

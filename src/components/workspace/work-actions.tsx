@@ -16,9 +16,20 @@ import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui
 import { Textarea } from "@/components/ui/textarea";
 import type { TaskStatus } from "@/lib/tasks/rules";
 import { celebrate } from "@/lib/celebrate";
-import { completeTaskAction, startTaskAction } from "@/server/actions/member";
+import { completeTaskAction, startTaskAction } from "@/server/actions/work";
 
-export function MemberTaskActions({ taskId, status }: { taskId: string; status: TaskStatus }) {
+/** Start / complete buttons for the person a task is assigned to. */
+export function WorkActions({
+  taskId,
+  status,
+  reportsTo = "your manager",
+}: {
+  taskId: string;
+  status: TaskStatus;
+  /** Who sees the progress, e.g. "your manager" or "the owner". */
+  reportsTo?: string;
+}) {
+  const Who = reportsTo.charAt(0).toUpperCase() + reportsTo.slice(1);
   const [pending, startTransition] = useTransition();
   const [completeOpen, setCompleteOpen] = useState(false);
   const [noteError, setNoteError] = useState<string>();
@@ -29,7 +40,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
     startTransition(async () => {
       const res = await startTaskAction(taskId);
       if (!res.ok) toast.error(res.error);
-      else toast.success("Marked as in progress", { description: "Your manager can see you've started." });
+      else toast.success("Marked as in progress", { description: `${Who} can see you've started.` });
     });
   }
 
@@ -45,7 +56,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
       setNoteError(undefined);
       setCompleteOpen(false);
       void celebrate();
-      toast.success("Task completed. Great work! 🎉", { description: "Your manager can see it's done." });
+      toast.success("Task completed. Great work! 🎉", { description: `${Who} can see it's done.` });
     });
   }
 
@@ -67,7 +78,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
           <DialogHeader>
             <DialogTitle>Complete this task</DialogTitle>
             <DialogDescription>
-              Tell your manager what was done. This can&apos;t be undone from your side.
+              Tell {reportsTo} what was done. This can&apos;t be undone from your side.
             </DialogDescription>
           </DialogHeader>
           <form id="complete-form" onSubmit={complete}>
@@ -83,7 +94,7 @@ export function MemberTaskActions({ taskId, status }: { taskId: string; status: 
               {noteError ? (
                 <FieldError>{noteError}</FieldError>
               ) : (
-                <FieldDescription>Required. Your manager sees this with the completed task.</FieldDescription>
+                <FieldDescription>Required. {Who} sees this with the completed task.</FieldDescription>
               )}
             </Field>
           </form>

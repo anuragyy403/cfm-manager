@@ -6,6 +6,8 @@ import { TASK_PRIORITIES } from "@/lib/tasks/rules";
 export const teamSchema = z.object({
   name: z.string().trim().min(2, "Team name must be at least 2 characters.").max(80),
   description: z.string().trim().max(300).optional().default(""),
+  /** Owner only: who runs the team. Ignored for managers (they run what they create). */
+  managerId: z.string().min(1).max(64).optional(),
 });
 
 export const taskInputSchema = z.object({
@@ -15,8 +17,17 @@ export const taskInputSchema = z.object({
   /** ISO timestamp produced by the browser from the local date/time picker. */
   dueAt: z.iso.datetime({ offset: true, error: "Choose a valid deadline." }),
   assigneeId: z.string().min(1, "Choose who this task is assigned to."),
+  teamId: z.string().min(1, "Choose a team.").max(64),
+  /** Set when splitting a bigger task into a subtask. */
+  parentId: z.string().min(1).max(64).optional(),
 });
 export type TaskInput = z.infer<typeof taskInputSchema>;
+
+/** Editing never moves a task to another team or parent. */
+export const taskUpdateSchema = taskInputSchema.omit({ teamId: true, parentId: true });
+export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
+
+export const roleChangeSchema = z.enum(["MANAGER", "MEMBER"]);
 
 export const completionSchema = z.object({
   note: z

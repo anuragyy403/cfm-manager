@@ -2,18 +2,25 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { Plus, UserPlus } from "lucide-react";
+import { ListTree, Plus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { type MemberOption, TaskFormDialog } from "./task-form-dialog";
+import { TaskFormDialog, type TeamOption } from "./task-form-dialog";
 
 export function NewTaskButton({
-  members,
+  teams,
+  base,
+  parent,
   defaultAssigneeId,
-  label = "New task",
+  defaultTeamId,
+  label,
   variant = "brand",
 }: {
-  members: MemberOption[];
+  teams: TeamOption[];
+  base: string;
+  /** Creates a subtask of this task instead of a new task. */
+  parent?: { id: string; title: string; teamId: string };
   defaultAssigneeId?: string;
+  defaultTeamId?: string;
   label?: string;
   variant?: "brand" | "outline" | "secondary";
 }) {
@@ -21,12 +28,12 @@ export function NewTaskButton({
   // Remount the form each time it opens so it starts empty.
   const [formKey, setFormKey] = useState(0);
 
-  if (members.length === 0) {
+  if (!teams.some((t) => t.people.length > 0)) {
     return (
       <Button asChild variant="secondary">
-        <Link href="/admin/team">
+        <Link href={`${base}/teams`}>
           <UserPlus />
-          Add team members first
+          {teams.length === 0 ? "Create a team first" : "Add people to a team first"}
         </Link>
       </Button>
     );
@@ -41,15 +48,18 @@ export function NewTaskButton({
           setOpen(true);
         }}
       >
-        <Plus />
-        {label}
+        {parent ? <ListTree /> : <Plus />}
+        {label ?? (parent ? "Add subtask" : "New task")}
       </Button>
       <TaskFormDialog
         key={formKey}
         open={open}
         onOpenChange={setOpen}
-        members={members}
+        teams={teams}
+        base={base}
+        parent={parent}
         defaultAssigneeId={defaultAssigneeId}
+        defaultTeamId={defaultTeamId}
       />
     </>
   );

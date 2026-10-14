@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CornerDownRight, ListTree } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   Table,
@@ -15,13 +16,18 @@ import type { TaskListItem } from "@/server/tasks";
 import { PriorityBadge, StatusBadge } from "./badges";
 import { DueChip } from "./due-chip";
 
-/** Admin task table: every task with who owns it, its status and its dates. */
+/** Lead task table: every task with who owns it, its team, status and dates. */
 export function TaskTable({
   tasks,
+  base,
   showAssignee = true,
+  showTeam = false,
 }: {
   tasks: TaskListItem[];
+  /** Workspace the links point into, e.g. "/admin" or "/manager". */
+  base: string;
   showAssignee?: boolean;
+  showTeam?: boolean;
 }) {
   return (
     <Table>
@@ -29,6 +35,7 @@ export function TaskTable({
         <TableRow>
           <TableHead className="min-w-56">Task</TableHead>
           {showAssignee && <TableHead>Assignee</TableHead>}
+          {showTeam && <TableHead>Team</TableHead>}
           <TableHead>Status</TableHead>
           <TableHead>Priority</TableHead>
           <TableHead>Deadline</TableHead>
@@ -42,17 +49,25 @@ export function TaskTable({
             <TableRow key={t.id} className={cn(t.archivedAt && "opacity-60")}>
               <TableCell className="max-w-80">
                 <Link
-                  href={`/admin/tasks/${t.id}`}
+                  href={`${base}/tasks/${t.id}`}
                   className="line-clamp-2 font-medium whitespace-normal hover:text-primary hover:underline"
                 >
                   {t.title}
                 </Link>
+                <TaskRelation task={t} />
               </TableCell>
               {showAssignee && (
                 <TableCell>
-                  <Link href={`/admin/team/${t.assignee.id}`} className="flex items-center gap-2 hover:underline">
+                  <Link href={`${base}/people/${t.assignee.id}`} className="flex items-center gap-2 hover:underline">
                     <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
                     <span className="text-sm">{t.assignee.name}</span>
+                  </Link>
+                </TableCell>
+              )}
+              {showTeam && (
+                <TableCell>
+                  <Link href={`${base}/teams/${t.team.id}`} className="text-sm whitespace-nowrap hover:underline">
+                    {t.team.name}
                   </Link>
                 </TableCell>
               )}
@@ -96,4 +111,25 @@ export function TaskTable({
       </TableBody>
     </Table>
   );
+}
+
+/** Small line under a title: "Subtask of …" or "3 subtasks". */
+export function TaskRelation({ task }: { task: Pick<TaskListItem, "parent" | "_count"> }) {
+  if (task.parent) {
+    return (
+      <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+        <CornerDownRight className="size-3 shrink-0" />
+        <span className="truncate">Subtask of {task.parent.title}</span>
+      </span>
+    );
+  }
+  if (task._count.subtasks > 0) {
+    return (
+      <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground">
+        <ListTree className="size-3 shrink-0" />
+        {task._count.subtasks} subtask{task._count.subtasks === 1 ? "" : "s"}
+      </span>
+    );
+  }
+  return null;
 }

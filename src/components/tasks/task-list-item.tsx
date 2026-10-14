@@ -18,6 +18,7 @@ export function TaskListItem({
   task,
   href,
   assignee,
+  context,
 }: {
   task: {
     id: string;
@@ -28,8 +29,10 @@ export function TaskListItem({
     completedAt: Date | null;
   };
   href: string;
-  /** Shown on admin views so the manager sees who owns the task. */
+  /** Shown on lead views so the owner or manager sees who owns the task. */
   assignee?: { id: string; name: string };
+  /** Extra detail such as the team, or "Part of …" for a subtask. */
+  context?: string;
 }) {
   return (
     <Link
@@ -42,6 +45,7 @@ export function TaskListItem({
         <p className="truncate font-medium group-hover:text-brand-navy dark:group-hover:text-white">{task.title}</p>
         <div className="flex flex-wrap items-center gap-1.5">
           {assignee && <span className="mr-1 text-xs text-muted-foreground">{assignee.name}</span>}
+          {context && <span className="mr-1 max-w-56 truncate text-xs text-muted-foreground">{context}</span>}
           <DueChip task={task} />
           <PriorityBadge priority={task.priority} className="h-6" />
           <StatusBadge status={task.status} dueAt={task.dueAt} className="h-6 sm:hidden" />

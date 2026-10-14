@@ -5,7 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { appUrl, isEmailConfigured, sendEmail } from "@/server/email";
 import { resetPasswordEmail } from "@/server/emails/reset-password";
 import type { CurrentUser } from "@/server/session";
-import { DomainError, getAdminTeam } from "@/server/teams";
+import { DomainError, isOwner, teamScope } from "@/server/access";
 
 /**
  * Whether a reset link's token can still be used (exists, not used, not
@@ -23,30 +23,30 @@ export async function isResetTokenValid(token: string | undefined): Promise<bool
 }
 
 /**
- * Admin helps a locked-out member: emails them a password reset link.
- * Only for current members of the admin's own team. The admin never sees the
- * link or the new password.
+ * A lead helps a locked-out colleague: emails them a password reset link.
+ * The owner can do this for anyone; a manager only for employees on their
+ * teams. The lead never sees the link or the new password.
  *
  * The token is stored exactly as Better Auth's own "forgot password" flow
  * stores it, so the normal reset page and `/reset-password` endpoint accept
  * it (one use, same expiry). It is issued here rather than through
  * `auth.api.requestPasswordReset` because that call hides email failures,
- * and the admin needs to know if the email didn't go out.
+ * and the lead needs to know if the email didn't go out.
  */
-export async function sendMemberPasswordReset(admin: CurrentUser, userId: string) {
-  const team = await getAdminTeam(admin);
-  if (!team) throw new DomainError("Create your team first.");
-
-  const membership = await prisma.teamMember.findUnique({
-    where: { teamId_userId: { teamId: team.id, userId } },
-    select: { user: { select: { email: true, name: true } } },
+export async function sendMemberPasswordReset(viewer: CurrentUser, userId: string) {
+  if (userId === viewer.id) throw new DomainError("Use Account settings to change your own password.");
+  const target = await prisma.user.findFirst({
+    where: isOwner(viewer)
+      ? { id: userId }
+      : { id: userId, role: "MEMBER", memberships: { some: { team: teamScope(viewer) } } },
+    select: { email: true, name: true },
   });
-  if (!membership) throw new DomainError("That person isn't on your team.");
+  if (!target) throw new DomainError("That person isn't on your team.");
   if (!isEmailConfigured()) {
     throw new DomainError("Email sending isn't set up yet, so the reset email can't be sent.");
   }
 
-  const { email, name } = membership.user;
+  const { email, name } = target;
   const token = randomBytes(24).toString("base64url");
   const identifier = `reset-password:${token}`;
   await prisma.verification.create({
@@ -70,7 +70,7 @@ export async function sendMemberPasswordReset(admin: CurrentUser, userId: string
     );
   } catch (e) {
     await prisma.verification.deleteMany({ where: { identifier } });
-    console.error("Admin password reset email failed:", e);
+    console.error("Password reset email (sent by a lead) failed:", e);
     throw new DomainError("The reset email couldn't be sent. Please try again in a few minutes.");
   }
   return { email, name };

@@ -27,10 +27,13 @@ const VIEWS = [
 
 export function TaskFilters({
   members,
+  teams = [],
   counts,
   layout,
 }: {
   members: { id: string; name: string }[];
+  /** Shown as a team filter when there is more than one team. */
+  teams?: { id: string; name: string }[];
   counts: Record<string, number>;
   layout: "table" | "board";
 }) {
@@ -59,7 +62,7 @@ export function TaskFilters({
   }, [q]);
 
   const view = params.get("view") ?? "all";
-  const hasFilters = !!(params.get("q") || params.get("assignee") || params.get("priority"));
+  const hasFilters = !!(params.get("q") || params.get("assignee") || params.get("priority") || params.get("team"));
 
   return (
     <div className="space-y-3">
@@ -120,12 +123,27 @@ export function TaskFilters({
             aria-label="Search tasks"
           />
         </div>
+        {teams.length > 1 && (
+          <Select value={params.get("team") ?? "any"} onValueChange={(v) => update({ team: v })}>
+            <SelectTrigger className="sm:w-44" aria-label="Filter by team">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="any">All teams</SelectItem>
+              {teams.map((t) => (
+                <SelectItem key={t.id} value={t.id}>
+                  {t.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         <Select value={params.get("assignee") ?? "any"} onValueChange={(v) => update({ assignee: v })}>
-          <SelectTrigger className="sm:w-48" aria-label="Filter by member">
+          <SelectTrigger className="sm:w-48" aria-label="Filter by person">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="any">All members</SelectItem>
+            <SelectItem value="any">Everyone</SelectItem>
             {members.map((m) => (
               <SelectItem key={m.id} value={m.id}>
                 {m.name}
@@ -152,7 +170,7 @@ export function TaskFilters({
             size="sm"
             onClick={() => {
               setQ("");
-              update({ q: null, assignee: null, priority: null });
+              update({ q: null, assignee: null, priority: null, team: null });
             }}
           >
             <X />

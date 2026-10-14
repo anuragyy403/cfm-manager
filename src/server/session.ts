@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type { Role } from "@/generated/prisma/client";
+import { HOME_PATHS } from "@/lib/roles";
 
 export type CurrentUser = {
   id: string;
@@ -47,17 +48,38 @@ export async function requireUser(): Promise<CurrentUser> {
   return user;
 }
 
-/** Admins only. Members are sent to their own dashboard. */
-export async function requireAdmin(): Promise<CurrentUser> {
+/** The owner only. Everyone else is sent to their own workspace. */
+export async function requireOwner(): Promise<CurrentUser> {
   const user = await requireUser();
-  if (user.role !== "ADMIN") redirect("/dashboard");
+  if (user.role !== "ADMIN") redirect(homePathFor(user.role));
   return user;
 }
 
-/** Team members only. Admins are sent to the admin dashboard. */
-export async function requireMember(): Promise<CurrentUser> {
+/** Managers only. */
+export async function requireManager(): Promise<CurrentUser> {
   const user = await requireUser();
-  if (user.role !== "MEMBER") redirect("/admin");
+  if (user.role !== "MANAGER") redirect(homePathFor(user.role));
+  return user;
+}
+
+/** Anyone who leads people: the owner or a manager. */
+export async function requireLead(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role === "MEMBER") redirect(homePathFor(user.role));
+  return user;
+}
+
+/** Employees only. */
+export async function requireEmployee(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role !== "MEMBER") redirect(homePathFor(user.role));
+  return user;
+}
+
+/** Anyone who can be assigned work: a manager or an employee (never the owner). */
+export async function requireAssignee(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role === "ADMIN") redirect(homePathFor(user.role));
   return user;
 }
 
@@ -68,5 +90,5 @@ export async function redirectIfSignedIn() {
 }
 
 export function homePathFor(role: Role) {
-  return role === "ADMIN" ? "/admin" : "/dashboard";
+  return HOME_PATHS[role];
 }

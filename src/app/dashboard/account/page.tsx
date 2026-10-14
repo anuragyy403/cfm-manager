@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { AccountSettings } from "@/components/account/account-settings";
 import { PageHeader } from "@/components/page-header";
-import { requireMember } from "@/server/session";
+import { requireEmployee } from "@/server/session";
 
 export const metadata: Metadata = { title: "Account settings" };
 
-export default async function MemberAccountPage() {
-  const user = await requireMember();
+export default async function EmployeeAccountPage() {
+  const user = await requireEmployee();
   return (
     <>
       <PageHeader title="Account settings" description="Update your name and password." />

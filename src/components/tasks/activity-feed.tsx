@@ -5,6 +5,7 @@ import {
   CheckCircle2,
   CirclePlay,
   Pencil,
+  ListTree,
   PlusCircle,
   RotateCcw,
   UserRoundPen,
@@ -32,6 +33,7 @@ const icons: Record<TaskActivityType, typeof Pencil> = {
   REOPENED: RotateCcw,
   ARCHIVED: Archive,
   RESTORED: ArchiveRestore,
+  SUBTASK_ADDED: ListTree,
 };
 
 const badgeTone: Record<TaskActivityType, string> = {
@@ -43,6 +45,7 @@ const badgeTone: Record<TaskActivityType, string> = {
   REOPENED: "bg-amber-500 text-white",
   ARCHIVED: "bg-slate-400 text-white",
   RESTORED: "bg-slate-500 text-white",
+  SUBTASK_ADDED: "bg-brand-orange text-white",
 };
 
 type Details = {
@@ -51,6 +54,9 @@ type Details = {
   toAssigneeId?: string;
   onTime?: boolean;
   reason?: string;
+  title?: string;
+  assigneeId?: string;
+  withParent?: boolean;
 };
 
 function describe(a: FeedActivity, names: Record<string, string>) {
@@ -72,9 +78,13 @@ function describe(a: FeedActivity, names: Record<string, string>) {
     case "REOPENED":
       return "reopened the task";
     case "ARCHIVED":
-      return "archived the task";
+      return d.withParent ? "archived the task together with its main task" : "archived the task";
     case "RESTORED":
       return "restored the task";
+    case "SUBTASK_ADDED": {
+      const who = (d.assigneeId && names[d.assigneeId]) || "a team member";
+      return `added a subtask “${d.title ?? "Untitled"}” for ${who}`;
+    }
   }
 }
 
@@ -85,7 +95,7 @@ export function ActivityFeed({
   emptyText = "No activity yet.",
 }: {
   activities: FeedActivity[];
-  /** userId → name, used to describe reassignments. */
+  /** userId → name, used to describe reassignments and subtasks. */
   names?: Record<string, string>;
   /** When set, each entry links to its task. */
   taskHref?: (taskId: string) => string;

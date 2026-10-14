@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import type { TaskListItem } from "@/server/tasks";
 import { PriorityBadge } from "./badges";
 import { DueChip } from "./due-chip";
+import { TaskRelation } from "./task-table";
 
 const COLUMNS: { status: DisplayStatus; label: string; icon: typeof Circle; accent: string; dot: string }[] = [
   { status: "PENDING", label: "Pending", icon: Circle, accent: "border-t-slate-400", dot: "text-slate-500" },
@@ -17,7 +18,7 @@ const COLUMNS: { status: DisplayStatus; label: string; icon: typeof Circle; acce
 const COMPLETED_LIMIT = 15;
 
 /** Kanban-style overview of the team's work, one column per status. */
-export function TaskBoard({ tasks }: { tasks: TaskListItem[] }) {
+export function TaskBoard({ tasks, base }: { tasks: TaskListItem[]; base: string }) {
   const now = new Date();
   const byStatus = new Map<DisplayStatus, TaskListItem[]>(COLUMNS.map((c) => [c.status, []]));
   for (const t of tasks) byStatus.get(displayStatus(t, now))!.push(t);
@@ -57,7 +58,7 @@ export function TaskBoard({ tasks }: { tasks: TaskListItem[] }) {
                 {shown.map((t) => (
                   <Link
                     key={t.id}
-                    href={`/admin/tasks/${t.id}`}
+                    href={`${base}/tasks/${t.id}`}
                     className="group space-y-3 rounded-xl border bg-card p-3 shadow-xs transition-all hover:-translate-y-0.5 hover:border-brand-navy/20 hover:shadow-md"
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -66,6 +67,11 @@ export function TaskBoard({ tasks }: { tasks: TaskListItem[] }) {
                       </p>
                       <PriorityBadge priority={t.priority} className="shrink-0" />
                     </div>
+                    {(t.parent || t._count.subtasks > 0) && (
+                      <div className="-mt-2">
+                        <TaskRelation task={t} />
+                      </div>
+                    )}
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
                         <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
@@ -77,7 +83,7 @@ export function TaskBoard({ tasks }: { tasks: TaskListItem[] }) {
                 ))}
                 {list.length > shown.length && (
                   <Link
-                    href="/admin/tasks?view=COMPLETED"
+                    href={`${base}/tasks?view=COMPLETED`}
                     className="py-1 text-center text-xs font-medium text-muted-foreground hover:text-foreground"
                   >
                     + {list.length - shown.length} more completed

@@ -1,5 +1,5 @@
 import { AppShell, type NavItem } from "@/components/app-shell";
-import { requireMember } from "@/server/session";
+import { requireEmployee } from "@/server/session";
 
 const nav: NavItem[] = [
   { href: "/dashboard", label: "My day", shortLabel: "My day", icon: "overview", exact: true },
@@ -7,7 +7,7 @@ const nav: NavItem[] = [
 ];
 
 export default async function MemberLayout({ children }: LayoutProps<"/dashboard">) {
-  const user = await requireMember();
+  const user = await requireEmployee();
   return (
     <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, role: user.role }}>
       {children}

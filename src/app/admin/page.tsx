@@ -9,6 +9,7 @@ import {
   Clock,
   KanbanSquare,
   Target,
+  Users,
 } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GettingStarted } from "@/components/getting-started";
@@ -22,82 +23,82 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { WelcomeBanner } from "@/components/welcome-banner";
+import { NewTaskButton } from "@/components/workspace/new-task-button";
+import { NewTeamButton } from "@/components/workspace/team-dialogs";
 import { formatPercent } from "@/lib/format";
-import { getTeamAnalytics } from "@/server/analytics";
-import { requireAdmin } from "@/server/session";
-import { listAttentionTasks, listTeamActivity } from "@/server/tasks";
-import { getAdminTeam, listMemberOptions } from "@/server/teams";
-import { NewTaskButton } from "./tasks/new-task-button";
+import { computeMetrics } from "@/lib/tasks/metrics";
+import { listPeople } from "@/server/people";
+import { requireOwner } from "@/server/session";
+import { listActivity, listAttentionTasks } from "@/server/tasks";
+import { listAssignableTeams, listManagerCandidates, listTeamsWithMetrics } from "@/server/teams";
 
 export const metadata: Metadata = { title: "Overview" };
 
-export default async function AdminOverviewPage() {
-  const admin = await requireAdmin();
-  const team = await getAdminTeam(admin);
-
-  if (!team) {
-    return (
-      <>
-        <WelcomeBanner
-          name={admin.name}
-          subtitle="Welcome to CFM Workplace. Set up your team and start assigning work in a couple of minutes."
-        />
-        <GettingStarted
-          steps={[
-            {
-              label: "Create your team",
-              description: "Give your team a name. You can change it any time.",
-              done: false,
-              href: "/admin/team",
-              cta: "Create team",
-            },
-            {
-              label: "Add your people",
-              description: "Search for colleagues who have signed up and add them.",
-              done: false,
-              href: "/admin/team",
-              cta: "Add members",
-            },
-            {
-              label: "Assign the first task",
-              description: "Create a task with a deadline and pick who owns it.",
-              done: false,
-              href: "/admin/tasks",
-              cta: "Create a task",
-            },
-          ]}
-        />
-      </>
-    );
-  }
-
-  const [analytics, attention, activity, memberOptions] = await Promise.all([
-    getTeamAnalytics(admin),
-    listAttentionTasks(admin),
-    listTeamActivity(admin, 10),
-    listMemberOptions(team.id),
+export default async function OwnerOverviewPage() {
+  const owner = await requireOwner();
+  const [teams, people, attention, activity, assignable, managerCandidates] = await Promise.all([
+    listTeamsWithMetrics(owner),
+    listPeople(owner),
+    listAttentionTasks(owner, 8),
+    listActivity(owner, 12),
+    listAssignableTeams(owner),
+    listManagerCandidates(),
   ]);
-  const m = analytics!.team;
-  const ranked = [...analytics!.members].sort(
+
+  const managers = people.filter((p) => p.role === "MANAGER");
+  const employees = people.filter((p) => p.role === "MEMBER");
+  // Company-wide numbers are the sum of every team's tasks.
+  const m = sumMetrics(teams.map((t) => t.metrics));
+  const open = m.pending + m.inProgress + m.overdue;
+  const rankedTeams = [...teams].sort(
     (a, b) => b.metrics.overdue - a.metrics.overdue || (a.metrics.completionRate ?? 1) - (b.metrics.completionRate ?? 1),
   );
-  const open = m.pending + m.inProgress + m.overdue;
+
+  const steps = [
+    {
+      label: "Create your teams",
+      description: "Add teams like Tech and Business, and choose who manages each one.",
+      done: teams.length > 0,
+      href: "/admin/teams",
+      cta: "Create a team",
+    },
+    {
+      label: "Add your people",
+      description: "Put employees on teams, or let managers add their own.",
+      done: teams.some((t) => t._count.members > 0),
+      href: "/admin/teams",
+      cta: "Open teams",
+    },
+    {
+      label: "Assign the first task",
+      description: "Give work to a manager or straight to an employee.",
+      done: m.total > 0,
+      href: "/admin/tasks",
+      cta: "Create a task",
+    },
+  ];
 
   return (
     <>
       <AutoRefresh />
       <WelcomeBanner
-        name={admin.name}
+        name={owner.name}
         subtitle={
-          m.total === 0
-            ? `${team.name} is ready. Assign the first task to get things moving.`
-            : `${team.name} has ${open} open task${open === 1 ? "" : "s"}${
-                m.overdue ? `, ${m.overdue} overdue` : ""
-              }. ${attention.length ? "A few need your attention below." : "Everything is on track."}`
+          teams.length === 0
+            ? "Welcome to CFM Workplace. Create your teams and choose their managers to get started."
+            : `${teams.length} team${teams.length === 1 ? "" : "s"}, ${managers.length} manager${
+                managers.length === 1 ? "" : "s"
+              } and ${employees.length} employee${employees.length === 1 ? "" : "s"}. ${open} open task${
+                open === 1 ? "" : "s"
+              }${m.overdue ? `, ${m.overdue} overdue` : ""}.`
         }
         actions={
           <>
-            <NewTaskButton members={memberOptions} />
+            {teams.length === 0 ? (
+              <NewTeamButton base="/admin" managers={managerCandidates} />
+            ) : (
+              <NewTaskButton teams={assignable} base="/admin" />
+            )}
             <Button asChild variant="outline" className="border-white/20 bg-white/5 text-white hover:bg-white/15 hover:text-white">
               <Link href="/admin/tasks?layout=board">
                 <KanbanSquare />
@@ -106,28 +107,10 @@ export default async function AdminOverviewPage() {
             </Button>
           </>
         }
-        aside={<ProgressRing value={m.completionRate} size={112} label="team completion" />}
+        aside={teams.length > 0 && <ProgressRing value={m.completionRate} size={112} label="company completion" />}
       />
 
-      <GettingStarted
-        steps={[
-          { label: "Create your team", description: "Done. Rename it any time from the Team page.", done: true, href: "/admin/team", cta: "Open team" },
-          {
-            label: "Add your people",
-            description: "Search for colleagues who have signed up and add them.",
-            done: memberOptions.length > 0,
-            href: "/admin/team",
-            cta: "Add members",
-          },
-          {
-            label: "Assign the first task",
-            description: "Create a task with a deadline and pick who owns it.",
-            done: m.total > 0,
-            href: "/admin/tasks",
-            cta: "Create a task",
-          },
-        ]}
-      />
+      <GettingStarted steps={steps} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
         <StatCard label="Total tasks" value={m.total} icon={ClipboardList} hint={`${m.pending} not started`} />
@@ -148,8 +131,68 @@ export default async function AdminOverviewPage() {
         <div className="space-y-6 xl:col-span-2">
           <Card>
             <CardHeader>
+              <CardTitle>Teams at a glance</CardTitle>
+              <CardDescription>Teams with overdue work or low completion appear first.</CardDescription>
+              <CardAction>
+                <Button asChild variant="ghost" size="sm">
+                  <Link href="/admin/teams">
+                    All teams <ArrowRight />
+                  </Link>
+                </Button>
+              </CardAction>
+            </CardHeader>
+            <CardContent>
+              {rankedTeams.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-6 text-center">
+                  <EmptyIllustration kind="team" className="h-24" />
+                  <p className="text-sm text-muted-foreground">No teams yet.</p>
+                </div>
+              ) : (
+                <ul className="grid gap-3 sm:grid-cols-2">
+                  {rankedTeams.map((t) => (
+                    <li key={t.id}>
+                      <Link
+                        href={`/admin/teams/${t.id}`}
+                        className="flex flex-col gap-3 rounded-xl border p-4 transition-all hover:-translate-y-px hover:shadow-md"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate font-medium">{t.name}</span>
+                          {t.metrics.overdue > 0 ? (
+                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+                              {t.metrics.overdue} overdue
+                            </span>
+                          ) : (
+                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                              {t.metrics.completed}/{t.metrics.total} done
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <UserAvatar name={t.manager.name} id={t.manager.id} size="xs" />
+                          <span className="truncate">
+                            {t.manager.id === owner.id ? "Managed by you" : t.manager.name}
+                          </span>
+                          <span className="ml-auto flex items-center gap-1">
+                            <Users className="size-3.5" />
+                            {t._count.members}
+                          </span>
+                        </div>
+                        <Progress
+                          value={(t.metrics.completionRate ?? 0) * 100}
+                          className="h-1.5 **:data-[slot=progress-indicator]:bg-brand-orange"
+                        />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>Needs attention</CardTitle>
-              <CardDescription>Open tasks that are overdue or due in the next 48 hours.</CardDescription>
+              <CardDescription>Open tasks across every team that are overdue or due in the next 48 hours.</CardDescription>
               <CardAction>
                 <Button asChild variant="ghost" size="sm">
                   <Link href="/admin/tasks?view=OVERDUE">
@@ -167,7 +210,13 @@ export default async function AdminOverviewPage() {
                 </div>
               ) : (
                 attention.map((t) => (
-                  <TaskListItem key={t.id} task={t} href={`/admin/tasks/${t.id}`} assignee={t.assignee} />
+                  <TaskListItem
+                    key={t.id}
+                    task={t}
+                    href={`/admin/tasks/${t.id}`}
+                    assignee={t.assignee}
+                    context={t.team.name}
+                  />
                 ))
               )}
             </CardContent>
@@ -175,57 +224,54 @@ export default async function AdminOverviewPage() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Team at a glance</CardTitle>
-              <CardDescription>Members with overdue work or low completion appear first.</CardDescription>
+              <CardTitle>Managers</CardTitle>
+              <CardDescription>Each manager&apos;s teams and the work assigned to them personally.</CardDescription>
               <CardAction>
                 <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/analytics">
-                    Full analytics <ArrowRight />
+                  <Link href="/admin/people">
+                    All people <ArrowRight />
                   </Link>
                 </Button>
               </CardAction>
             </CardHeader>
             <CardContent>
-              {ranked.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-center">
-                  <EmptyIllustration kind="team" className="h-24" />
-                  <p className="text-sm text-muted-foreground">
-                    No members yet.{" "}
-                    <Link href="/admin/team" className="font-medium text-brand-orange-hover hover:underline">
-                      Add your team
-                    </Link>
-                  </p>
-                </div>
+              {managers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No managers yet. Promote an employee from{" "}
+                  <Link href="/admin/people" className="font-medium text-brand-orange-hover hover:underline">
+                    People
+                  </Link>{" "}
+                  or from a team&apos;s page.
+                </p>
               ) : (
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {ranked.map(({ user, metrics }) => (
-                    <li key={user.id}>
-                      <Link
-                        href={`/admin/team/${user.id}`}
-                        className="flex items-center gap-3 rounded-xl border p-3 transition-all hover:-translate-y-px hover:shadow-md"
-                      >
-                        <UserAvatar name={user.name} id={user.id} size="md" />
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <span className="truncate text-sm font-medium">{user.name}</span>
-                            {metrics.overdue > 0 ? (
-                              <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
-                                {metrics.overdue} overdue
-                              </span>
-                            ) : (
-                              <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                                {metrics.completed}/{metrics.total} done
-                              </span>
-                            )}
+                <ul className="divide-y">
+                  {managers.map((p) => {
+                    const pm = p.metrics;
+                    return (
+                      <li key={p.id}>
+                        <Link
+                          href={`/admin/people/${p.id}`}
+                          className="flex items-center gap-3 py-3 first:pt-0 last:pb-0 hover:underline"
+                        >
+                          <UserAvatar name={p.name} id={p.id} />
+                          <div className="grid min-w-0 flex-1 leading-tight">
+                            <span className="truncate font-medium">{p.name}</span>
+                            <span className="truncate text-xs text-muted-foreground">
+                              {p.managedTeams.length ? p.managedTeams.map((t) => t.name).join(", ") : "No team yet"}
+                            </span>
                           </div>
-                          <Progress
-                            value={(metrics.completionRate ?? 0) * 100}
-                            className="mt-2 h-1.5 **:data-[slot=progress-indicator]:bg-brand-orange"
-                          />
-                        </div>
-                      </Link>
-                    </li>
-                  ))}
+                          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                            {pm.pending + pm.inProgress + pm.overdue} open
+                          </span>
+                          {pm.overdue > 0 && (
+                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+                              {pm.overdue} overdue
+                            </span>
+                          )}
+                        </Link>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </CardContent>
@@ -235,7 +281,7 @@ export default async function AdminOverviewPage() {
         <Card className="h-fit">
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
-            <CardDescription>Latest updates from your team.</CardDescription>
+            <CardDescription>Latest updates from every team.</CardDescription>
           </CardHeader>
           <CardContent>
             <ActivityFeed activities={activity} taskHref={(id) => `/admin/tasks/${id}`} />
@@ -244,4 +290,24 @@ export default async function AdminOverviewPage() {
       </div>
     </>
   );
+}
+
+/** Adds up team metrics into one company-wide set (rates recomputed from the totals). */
+function sumMetrics(list: ReturnType<typeof computeMetrics>[]) {
+  const total = computeMetrics([]);
+  let completionMs = 0;
+  for (const x of list) {
+    total.total += x.total;
+    total.completed += x.completed;
+    total.inProgress += x.inProgress;
+    total.pending += x.pending;
+    total.overdue += x.overdue;
+    total.completedOnTime += x.completedOnTime;
+    total.completedLate += x.completedLate;
+    completionMs += (x.avgCompletionMs ?? 0) * x.completed;
+  }
+  total.completionRate = total.total ? total.completed / total.total : null;
+  total.onTimeRate = total.completed ? total.completedOnTime / total.completed : null;
+  total.avgCompletionMs = total.completed ? completionMs / total.completed : null;
+  return total;
 }

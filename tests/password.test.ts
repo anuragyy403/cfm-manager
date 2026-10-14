@@ -18,7 +18,7 @@ vi.mock("@/server/email", async (importOriginal) => ({
 const { auth } = await import("@/lib/auth");
 const { prisma } = await import("@/lib/prisma");
 const { isResetTokenValid, sendMemberPasswordReset } = await import("@/server/password-reset");
-const { DomainError } = await import("@/server/teams");
+const { DomainError } = await import("@/server/access");
 const { resetPasswordEmail } = await import("@/server/emails/reset-password");
 
 const OLD = "old-password-123";
@@ -182,21 +182,31 @@ describe("change password while signed in", () => {
   });
 });
 
-describe("admin sends a member a reset email", () => {
-  async function setup() {
-    const admin = await prisma.user.create({
-      data: { id: randomUUID(), name: "Admin", email: `admin${randomUUID().slice(0, 6)}@test.local`, role: "ADMIN" },
+describe("a lead sends someone a reset email", () => {
+  async function lead(role: "ADMIN" | "MANAGER") {
+    return prisma.user.create({
+      data: { id: randomUUID(), name: role, email: `${role.toLowerCase()}${randomUUID().slice(0, 6)}@test.local`, role },
       select: { id: true, name: true, email: true, username: true, image: true, role: true },
     });
+  }
+  async function setup() {
+    const admin = await lead("MANAGER");
     const member = await signUp("Neha");
     const outsider = await signUp("Omar");
     await prisma.team.create({
-      data: { name: "Team", ownerId: admin.id, members: { create: [{ userId: member.id }] } },
+      data: { name: "Team", managerId: admin.id, members: { create: [{ userId: member.id }] } },
     });
     return { admin, member, outsider };
   }
 
-  it("emails a working one-time link to a team member", async () => {
+  it("the owner can send one to anyone", async () => {
+    const owner = await lead("ADMIN");
+    const { outsider } = await setup();
+    await sendMemberPasswordReset(owner, outsider.id);
+    expect(outbox).toHaveLength(1);
+  });
+
+  it("a manager emails a working one-time link to someone on their team", async () => {
     const { admin, member } = await setup();
     const res = await sendMemberPasswordReset(admin, member.id);
     expect(res.email).toBe(member.email);
@@ -212,13 +222,13 @@ describe("admin sends a member a reset email", () => {
     });
   });
 
-  it("refuses people who aren't on the admin's team", async () => {
+  it("a manager can't send one to people who aren't on their team", async () => {
     const { admin, outsider } = await setup();
     await expect(sendMemberPasswordReset(admin, outsider.id)).rejects.toThrow(DomainError);
     expect(outbox).toHaveLength(0);
   });
 
-  it("tells the admin when the email fails and leaves no usable link behind", async () => {
+  it("tells the lead when the email fails and leaves no usable link behind", async () => {
     const { admin, member } = await setup();
     sendEmail.mockRejectedValueOnce(new Error("Resend is down"));
     vi.spyOn(console, "error").mockImplementationOnce(() => {});

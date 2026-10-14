@@ -3,6 +3,16 @@
 import { useState, useTransition } from "react";
 import { Archive, ArchiveRestore, Loader2, Pencil, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,18 +24,26 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
-import { reopenTaskAction, setTaskArchivedAction } from "@/server/actions/admin";
-import { type EditableTask, type MemberOption, TaskFormDialog } from "../task-form-dialog";
+import { reopenTaskAction, setTaskArchivedAction } from "@/server/actions/lead";
+import { type EditableTask, TaskFormDialog, type TeamOption } from "./task-form-dialog";
 
-export function TaskAdminActions({
+/** Edit / reassign, reopen and archive, for leads allowed to change the task. */
+export function TaskManageActions({
   task,
-  members,
+  teams,
+  base,
   archived,
+  subtaskCount = 0,
 }: {
   task: EditableTask;
-  members: MemberOption[];
+  /** The task's own team (reassigning stays within it). */
+  teams: TeamOption[];
+  base: string;
   archived: boolean;
+  /** Open subtasks that would be archived along with this task. */
+  subtaskCount?: number;
 }) {
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editKey, setEditKey] = useState(0);
   const [reopenOpen, setReopenOpen] = useState(false);
@@ -36,7 +54,10 @@ export function TaskAdminActions({
     startTransition(async () => {
       const res = await setTaskArchivedAction(task.id, !archived);
       if (!res.ok) toast.error(res.error);
-      else toast.success(archived ? "Task restored" : "Task archived");
+      else {
+        setArchiveOpen(false);
+        toast.success(archived ? "Task restored" : "Task archived");
+      }
     });
   }
 
@@ -51,7 +72,7 @@ export function TaskAdminActions({
       }
       setReopenError(undefined);
       setReopenOpen(false);
-      toast.success("Task reopened", { description: "The member will see it in their open tasks again." });
+      toast.success("Task reopened", { description: "The assignee will see it in their open tasks again." });
     });
   }
 
@@ -75,19 +96,48 @@ export function TaskAdminActions({
           Reopen
         </Button>
       )}
-      <Button variant="outline" onClick={toggleArchive} disabled={pending}>
+      <Button
+        variant="outline"
+        onClick={() => (!archived && subtaskCount > 0 ? setArchiveOpen(true) : toggleArchive())}
+        disabled={pending}
+      >
         {pending ? <Loader2 className="animate-spin" /> : archived ? <ArchiveRestore /> : <Archive />}
         {archived ? "Restore" : "Archive"}
       </Button>
 
-      <TaskFormDialog key={editKey} open={editOpen} onOpenChange={setEditOpen} members={members} task={task} />
+      <TaskFormDialog key={editKey} open={editOpen} onOpenChange={setEditOpen} teams={teams} base={base} task={task} />
+
+      <AlertDialog open={archiveOpen} onOpenChange={(v) => !pending && setArchiveOpen(v)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Archive this task and its subtasks?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Its {subtaskCount} open subtask{subtaskCount === 1 ? "" : "s"} will be archived too and disappear from
+              everyone&apos;s dashboards. You can restore them one by one later.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={pending}
+              onClick={(e) => {
+                e.preventDefault();
+                toggleArchive();
+              }}
+            >
+              {pending && <Loader2 className="animate-spin" />}
+              Archive all
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={reopenOpen} onOpenChange={setReopenOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reopen this task?</DialogTitle>
             <DialogDescription>
-              It moves back to the member&apos;s open tasks. The previous completion is kept in the history.
+              It moves back to the assignee&apos;s open tasks. The previous completion is kept in the history.
             </DialogDescription>
           </DialogHeader>
           <form id="reopen-form" onSubmit={reopen}>

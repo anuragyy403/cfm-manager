@@ -3,14 +3,18 @@ import { notFound } from "next/navigation";
 import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canMemberTransition, completedOnTime, DUE_SOON_MS } from "@/lib/tasks/rules";
-import type { TaskInput } from "@/lib/validation";
+import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
+import { canAddSubtask, canManageTask, DomainError, myWorkScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
-import { DomainError, getAdminTeam, isTeamMember } from "@/server/teams";
+import { isAssignableInTeam } from "@/server/teams";
 
 /**
- * Task data access. Admin functions are scoped to the admin's own team;
- * member functions are scoped to tasks assigned to that member in a team they
- * currently belong to. Callers pass an already-verified user.
+ * Task data access.
+ *   - Lead functions (owner / manager) are scoped to the lead's teams, see
+ *     `src/server/access.ts`.
+ *   - "My work" functions are scoped to tasks assigned to that person in a
+ *     team they still belong to; employees and managers both use them.
+ * Callers pass an already-verified user.
  */
 
 export const taskListSelect = {
@@ -23,7 +27,11 @@ export const taskListSelect = {
   startedAt: true,
   completedAt: true,
   archivedAt: true,
+  parentId: true,
   assignee: { select: { id: true, name: true, username: true } },
+  team: { select: { id: true, name: true } },
+  parent: { select: { id: true, title: true } },
+  _count: { select: { subtasks: { where: { archivedAt: null } } } },
 } satisfies Prisma.TaskSelect;
 
 export type TaskListItem = Prisma.TaskGetPayload<{ select: typeof taskListSelect }>;
@@ -62,91 +70,160 @@ const activityInclude = {
   },
 } satisfies Prisma.TaskInclude;
 
-// ─── Admin ──────────────────────────────────────────────────────────────────
+// ─── Leads (owner and managers) ─────────────────────────────────────────────
 
-export type AdminTaskFilters = {
+export type TaskFilters = {
   view?: TaskView;
   assigneeId?: string;
+  teamId?: string;
   priority?: string;
   q?: string;
 };
 
-export async function listTeamTasks(admin: CurrentUser, filters: AdminTaskFilters = {}) {
-  const team = await getAdminTeam(admin);
-  if (!team) return [];
-  const view = filters.view ?? "all";
-  const where: Prisma.TaskWhereInput = {
-    teamId: team.id,
-    ...viewWhere(view),
+function filterWhere(viewer: CurrentUser, filters: Omit<TaskFilters, "view">): Prisma.TaskWhereInput {
+  return {
+    ...taskScope(viewer),
+    ...(filters.teamId ? { teamId: filters.teamId } : {}),
     ...(filters.assigneeId ? { assigneeId: filters.assigneeId } : {}),
     ...(filters.priority ? { priority: filters.priority as Prisma.TaskWhereInput["priority"] } : {}),
     ...(filters.q ? { title: { contains: filters.q, mode: "insensitive" } } : {}),
   };
+}
+
+export async function listTasks(viewer: CurrentUser, filters: TaskFilters = {}) {
+  const view = filters.view ?? "all";
   return prisma.task.findMany({
-    where,
+    where: { AND: [filterWhere(viewer, filters), viewWhere(view)] },
     select: taskListSelect,
     orderBy: view === "COMPLETED" ? { completedAt: "desc" } : { dueAt: "asc" },
     take: 500,
   });
 }
 
-/** Number of team tasks in each view, for the filter tabs. */
-export async function countTeamTasksByView(admin: CurrentUser) {
-  const team = await getAdminTeam(admin);
+/** Number of tasks in each view, for the filter tabs. */
+export async function countTasksByView(viewer: CurrentUser, filters: { teamId?: string } = {}) {
   const counts = Object.fromEntries(TASK_VIEWS.map((v) => [v, 0])) as Record<TaskView, number>;
-  if (!team) return counts;
   const now = new Date();
+  const base = filterWhere(viewer, filters);
   const results = await Promise.all(
-    TASK_VIEWS.map((v) => prisma.task.count({ where: { teamId: team.id, ...viewWhere(v, now) } })),
+    TASK_VIEWS.map((v) => prisma.task.count({ where: { AND: [base, viewWhere(v, now)] } })),
   );
   TASK_VIEWS.forEach((v, i) => (counts[v] = results[i]!));
   return counts;
 }
 
-export async function getTaskForAdmin(admin: CurrentUser, taskId: string) {
-  const team = await getAdminTeam(admin);
-  if (!team) notFound();
-  const task = await prisma.task.findFirst({
-    where: { id: taskId, teamId: team.id },
-    include: {
-      assignee: { select: { id: true, name: true, username: true, email: true } },
-      createdBy: { select: { id: true, name: true } },
-      ...activityInclude,
+const taskDetailInclude = {
+  assignee: { select: { id: true, name: true, username: true, email: true, role: true } },
+  createdBy: { select: { id: true, name: true, role: true } },
+  team: {
+    select: {
+      id: true,
+      name: true,
+      managerId: true,
+      manager: { select: { id: true, name: true, role: true } },
+      members: { select: { userId: true } },
     },
+  },
+  parent: { select: { id: true, title: true, assignee: { select: { id: true, name: true } } } },
+  subtasks: { select: taskListSelect, orderBy: [{ archivedAt: "asc" }, { dueAt: "asc" }] },
+  ...activityInclude,
+} satisfies Prisma.TaskInclude;
+
+/** A task a lead can see, with everything the detail page needs. 404 otherwise. */
+export async function getTask(viewer: CurrentUser, taskId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, ...taskScope(viewer) },
+    include: taskDetailInclude,
   });
   if (!task) notFound();
   return task;
 }
 
-async function requireTeamAndAssignee(admin: CurrentUser, assigneeId: string) {
-  const team = await getAdminTeam(admin);
-  if (!team) throw new DomainError("Create your team before assigning tasks.");
-  if (!(await isTeamMember(team.id, assigneeId))) {
-    throw new DomainError("Tasks can only be assigned to members of your team.");
-  }
-  return team;
+async function findTaskInScope(viewer: CurrentUser, taskId: string) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, ...taskScope(viewer) },
+    include: {
+      createdBy: { select: { role: true } },
+      team: { select: { managerId: true } },
+    },
+  });
+  if (!task) throw new DomainError("Task not found.");
+  return task;
 }
 
-export async function createTask(admin: CurrentUser, input: TaskInput) {
-  const team = await requireTeamAndAssignee(admin, input.assigneeId);
-  return prisma.task.create({
-    data: {
-      title: input.title,
-      description: input.description,
-      priority: input.priority,
-      dueAt: new Date(input.dueAt),
-      teamId: team.id,
-      assigneeId: input.assigneeId,
-      createdById: admin.id,
-      activities: {
-        create: { actorId: admin.id, type: "CREATED", toStatus: "PENDING" },
+async function findManageableTask(viewer: CurrentUser, taskId: string) {
+  const task = await findTaskInScope(viewer, taskId);
+  if (!canManageTask(viewer, task)) {
+    throw new DomainError("This task was assigned by the owner, so only the owner can change it.");
+  }
+  return task;
+}
+
+async function assertAssignable(teamId: string, assigneeId: string) {
+  if (!(await isAssignableInTeam(teamId, assigneeId))) {
+    throw new DomainError("Tasks can only be assigned to this team's manager or its employees.");
+  }
+}
+
+/**
+ * Creates a task, or a subtask when `parentId` is set. A subtask always lives
+ * in its parent's team and is logged on the parent as well.
+ */
+export async function createTask(viewer: CurrentUser, input: TaskInput) {
+  let teamId = input.teamId;
+  let parentId: string | null = null;
+
+  if (input.parentId) {
+    const parent = await findTaskInScope(viewer, input.parentId);
+    if (!canAddSubtask(viewer, parent)) {
+      throw new DomainError(
+        parent.parentId
+          ? "A subtask can't be split further."
+          : parent.status === "COMPLETED" || parent.archivedAt
+            ? "Subtasks can only be added to open tasks."
+            : "Only the owner or this team's manager can add subtasks.",
+      );
+    }
+    teamId = parent.teamId;
+    parentId = parent.id;
+  } else {
+    const team = await prisma.team.findFirst({ where: { id: teamId, ...teamScope(viewer) }, select: { id: true } });
+    if (!team) throw new DomainError("Choose one of your teams.");
+  }
+  await assertAssignable(teamId, input.assigneeId);
+
+  return prisma.$transaction(async (tx) => {
+    const task = await tx.task.create({
+      data: {
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+        dueAt: new Date(input.dueAt),
+        teamId,
+        parentId,
+        assigneeId: input.assigneeId,
+        createdById: viewer.id,
+        activities: {
+          create: { actorId: viewer.id, type: "CREATED", toStatus: "PENDING" },
+        },
       },
-    },
+    });
+    if (parentId) {
+      await tx.taskActivity.create({
+        data: {
+          taskId: parentId,
+          actorId: viewer.id,
+          type: "SUBTASK_ADDED",
+          details: { subtaskId: task.id, title: task.title, assigneeId: task.assigneeId },
+        },
+      });
+    }
+    return task;
   });
 }
 
-export async function updateTask(admin: CurrentUser, taskId: string, input: TaskInput) {
-  const existing = await getTaskForAdmin(admin, taskId);
+export async function updateTask(viewer: CurrentUser, taskId: string, input: TaskUpdateInput) {
+  const existing = await findManageableTask(viewer, taskId);
   if (existing.archivedAt) throw new DomainError("Restore this task before editing it.");
 
   const reassigned = input.assigneeId !== existing.assigneeId;
@@ -154,7 +231,7 @@ export async function updateTask(admin: CurrentUser, taskId: string, input: Task
     if (existing.status === "COMPLETED") {
       throw new DomainError("Reopen this task before reassigning it.");
     }
-    await requireTeamAndAssignee(admin, input.assigneeId);
+    await assertAssignable(existing.teamId, input.assigneeId);
   }
 
   const dueAt = new Date(input.dueAt);
@@ -169,7 +246,7 @@ export async function updateTask(admin: CurrentUser, taskId: string, input: Task
   const activities: Prisma.TaskActivityCreateManyTaskInput[] = [];
   if (changed.length) {
     activities.push({
-      actorId: admin.id,
+      actorId: viewer.id,
       type: "UPDATED",
       details: {
         fields: changed,
@@ -184,7 +261,7 @@ export async function updateTask(admin: CurrentUser, taskId: string, input: Task
   if (reassigned) {
     statusData = { status: "PENDING", startedAt: null, assignedAt: new Date() };
     activities.push({
-      actorId: admin.id,
+      actorId: viewer.id,
       type: "REASSIGNED",
       fromStatus: existing.status,
       toStatus: "PENDING",
@@ -206,22 +283,42 @@ export async function updateTask(admin: CurrentUser, taskId: string, input: Task
   });
 }
 
-export async function setTaskArchived(admin: CurrentUser, taskId: string, archived: boolean) {
-  const task = await getTaskForAdmin(admin, taskId);
+/** Archiving a task also archives its open subtasks; restoring brings back only the task. */
+export async function setTaskArchived(viewer: CurrentUser, taskId: string, archived: boolean) {
+  const task = await findManageableTask(viewer, taskId);
   if (Boolean(task.archivedAt) === archived) return;
-  await prisma.task.update({
-    where: { id: task.id },
-    data: {
-      archivedAt: archived ? new Date() : null,
-      activities: {
-        create: { actorId: admin.id, type: archived ? "ARCHIVED" : "RESTORED" },
+  const now = new Date();
+
+  await prisma.$transaction(async (tx) => {
+    await tx.task.update({
+      where: { id: task.id },
+      data: {
+        archivedAt: archived ? now : null,
+        activities: { create: { actorId: viewer.id, type: archived ? "ARCHIVED" : "RESTORED" } },
       },
-    },
+    });
+    if (archived) {
+      const subtasks = await tx.task.findMany({
+        where: { parentId: task.id, archivedAt: null },
+        select: { id: true },
+      });
+      if (subtasks.length) {
+        await tx.task.updateMany({ where: { id: { in: subtasks.map((s) => s.id) } }, data: { archivedAt: now } });
+        await tx.taskActivity.createMany({
+          data: subtasks.map((s) => ({
+            taskId: s.id,
+            actorId: viewer.id,
+            type: "ARCHIVED" as const,
+            details: { withParent: true },
+          })),
+        });
+      }
+    }
   });
 }
 
-export async function reopenTask(admin: CurrentUser, taskId: string, reason: string) {
-  const task = await getTaskForAdmin(admin, taskId);
+export async function reopenTask(viewer: CurrentUser, taskId: string, reason: string) {
+  const task = await findManageableTask(viewer, taskId);
   if (task.status !== "COMPLETED") throw new DomainError("Only completed tasks can be reopened.");
   if (task.archivedAt) throw new DomainError("Restore this task before reopening it.");
   const toStatus: TaskStatus = task.startedAt ? "IN_PROGRESS" : "PENDING";
@@ -237,7 +334,7 @@ export async function reopenTask(admin: CurrentUser, taskId: string, reason: str
     await tx.taskActivity.create({
       data: {
         taskId: task.id,
-        actorId: admin.id,
+        actorId: viewer.id,
         type: "REOPENED",
         fromStatus: "COMPLETED",
         toStatus,
@@ -252,12 +349,11 @@ export async function reopenTask(admin: CurrentUser, taskId: string, reason: str
 }
 
 /** Open tasks that are overdue or due within 48 hours, most urgent first. */
-export async function listAttentionTasks(admin: CurrentUser, take = 8) {
-  const team = await getAdminTeam(admin);
-  if (!team) return [];
+export async function listAttentionTasks(viewer: CurrentUser, take = 8, teamId?: string) {
   return prisma.task.findMany({
     where: {
-      teamId: team.id,
+      ...taskScope(viewer),
+      ...(teamId ? { teamId } : {}),
       archivedAt: null,
       status: { not: "COMPLETED" },
       dueAt: { lte: new Date(Date.now() + DUE_SOON_MS) },
@@ -268,12 +364,10 @@ export async function listAttentionTasks(admin: CurrentUser, take = 8) {
   });
 }
 
-/** Recent activity across the admin's team, newest first. */
-export async function listTeamActivity(admin: CurrentUser, take = 12) {
-  const team = await getAdminTeam(admin);
-  if (!team) return [];
+/** Recent activity across the lead's teams, newest first. */
+export async function listActivity(viewer: CurrentUser, take = 12) {
   return prisma.taskActivity.findMany({
-    where: { task: { teamId: team.id } },
+    where: { task: taskScope(viewer) },
     orderBy: { createdAt: "desc" },
     take,
     include: {
@@ -283,30 +377,34 @@ export async function listTeamActivity(admin: CurrentUser, take = 12) {
   });
 }
 
-// ─── Member ─────────────────────────────────────────────────────────────────
-
-/** Tasks visible to a member: assigned to them, not archived, in a team they're still on. */
-function memberScope(member: CurrentUser): Prisma.TaskWhereInput {
-  return {
-    assigneeId: member.id,
-    archivedAt: null,
-    team: { members: { some: { userId: member.id } } },
-  };
+/** Names for everyone referenced in task history (reassignments, subtasks). */
+export async function namesForActivities(activities: { details: unknown }[]) {
+  const ids = new Set<string>();
+  for (const a of activities) {
+    const d = (a.details ?? {}) as { fromAssigneeId?: string; toAssigneeId?: string; assigneeId?: string };
+    for (const id of [d.fromAssigneeId, d.toAssigneeId, d.assigneeId]) if (id) ids.add(id);
+  }
+  if (!ids.size) return {};
+  const people = await prisma.user.findMany({ where: { id: { in: [...ids] } }, select: { id: true, name: true } });
+  return Object.fromEntries(people.map((p) => [p.id, p.name]));
 }
 
-export async function listMyTasks(member: CurrentUser, view: TaskView = "all") {
+// ─── My work (employees and managers) ───────────────────────────────────────
+
+export async function listMyTasks(user: CurrentUser, view: TaskView = "all") {
   return prisma.task.findMany({
-    where: { ...viewWhere(view === "archived" ? "all" : view), ...memberScope(member) },
+    where: { ...viewWhere(view === "archived" ? "all" : view), ...myWorkScope(user) },
     select: { ...taskListSelect, description: true },
     orderBy: view === "COMPLETED" ? { completedAt: "desc" } : { dueAt: "asc" },
   });
 }
 
-export async function getMyTask(member: CurrentUser, taskId: string) {
+export async function getMyTask(user: CurrentUser, taskId: string) {
   const task = await prisma.task.findFirst({
-    where: { id: taskId, ...memberScope(member) },
+    where: { id: taskId, ...myWorkScope(user) },
     include: {
       createdBy: { select: { id: true, name: true } },
+      parent: { select: { id: true, title: true } },
       ...activityInclude,
     },
   });
@@ -315,13 +413,13 @@ export async function getMyTask(member: CurrentUser, taskId: string) {
 }
 
 async function transitionMyTask(
-  member: CurrentUser,
+  user: CurrentUser,
   taskId: string,
   to: TaskStatus,
   note?: string,
 ) {
   const task = await prisma.task.findFirst({
-    where: { id: taskId, ...memberScope(member) },
+    where: { id: taskId, ...myWorkScope(user) },
     select: { id: true, status: true, dueAt: true },
   });
   if (!task) throw new DomainError("Task not found.");
@@ -342,7 +440,7 @@ async function transitionMyTask(
   await prisma.$transaction(async (tx) => {
     // Conditional update guards against double submits and concurrent changes.
     const { count } = await tx.task.updateMany({
-      where: { id: task.id, status: task.status, assigneeId: member.id },
+      where: { id: task.id, status: task.status, assigneeId: user.id },
       data,
     });
     if (count === 0) {
@@ -351,7 +449,7 @@ async function transitionMyTask(
     await tx.taskActivity.create({
       data: {
         taskId: task.id,
-        actorId: member.id,
+        actorId: user.id,
         type: to === "IN_PROGRESS" ? "STARTED" : "COMPLETED",
         fromStatus: task.status,
         toStatus: to,
@@ -364,10 +462,10 @@ async function transitionMyTask(
   });
 }
 
-export function startMyTask(member: CurrentUser, taskId: string) {
-  return transitionMyTask(member, taskId, "IN_PROGRESS");
+export function startMyTask(user: CurrentUser, taskId: string) {
+  return transitionMyTask(user, taskId, "IN_PROGRESS");
 }
 
-export function completeMyTask(member: CurrentUser, taskId: string, note: string) {
-  return transitionMyTask(member, taskId, "COMPLETED", note);
+export function completeMyTask(user: CurrentUser, taskId: string, note: string) {
+  return transitionMyTask(user, taskId, "COMPLETED", note);
 }

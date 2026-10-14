@@ -22,23 +22,27 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { removeMemberAction } from "@/server/actions/admin";
+import { removeMemberAction } from "@/server/actions/lead";
 
 export function MemberActions({
+  teamId,
   userId,
   name,
   openTasks,
+  base,
 }: {
+  teamId: string;
   userId: string;
   name: string;
   openTasks: number;
+  base: string;
 }) {
   const [confirming, setConfirming] = useState(false);
   const [pending, startTransition] = useTransition();
 
   function remove() {
     startTransition(async () => {
-      const res = await removeMemberAction(userId);
+      const res = await removeMemberAction(teamId, userId);
       if (!res.ok) {
         toast.error(res.error);
         return;
@@ -58,7 +62,7 @@ export function MemberActions({
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem asChild>
-            <Link href={`/admin/team/${userId}`}>
+            <Link href={`${base}/people/${userId}`}>
               <UserRound />
               View profile
             </Link>

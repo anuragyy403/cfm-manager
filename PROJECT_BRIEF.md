@@ -2,35 +2,39 @@
 
 Product name: **CFM Workplace** (by Clickfieldmedia). Name and logo live in `src/components/brand.tsx` and `public/logo.png`.
 
-Team task tracking and management for a company manager (admin) and their team members.
+Task tracking and management for a company with three levels: the owner, managers who run teams, and employees.
 
 ## Roles
-- **Admin** — creates the team, adds members (by searching registered users), creates and assigns tasks, monitors every task, and sees performance analytics.
-- **Team Member** — sees only tasks assigned to them, moves them through the workflow, and reports completion.
+- **Owner** (stored as role `ADMIN`, exactly one) — sees and controls everything: every team, manager, employee and task. Creates teams and chooses their managers, promotes employees to managers (and back), assigns work to managers or straight to employees, and sees company-wide analytics. Workspace: `/admin`.
+- **Manager** (`MANAGER`) — runs one or more teams. Creates their own teams, adds employees, assigns tasks in their teams, splits tasks (including the owner's) into subtasks, works on tasks assigned to them, and sees analytics for their teams only. Workspace: `/manager`.
+- **Employee** (stored as role `MEMBER`) — on at most one team; sees only tasks assigned to them and moves them through the workflow. Workspace: `/dashboard`.
 
-## Agreed decisions (v1)
-1. Members sign up themselves; the admin finds and adds them via search. Single company, single admin.
-2. The admin role is never chosen at sign-up. It is granted with `npm run make-admin -- <email>`.
-3. Adding a member is direct (no invitation to accept).
-4. "Completed" counts when the member marks it. The admin can reopen a task with a reason (logged).
-5. The admin can edit, reassign and archive tasks; every change is logged.
+## Agreed decisions
+1. People sign up themselves; leads find and add them via search. Single company, single owner.
+2. The owner role is never chosen at sign-up. It is granted with `npm run make-admin -- <email>`, which refuses if an owner already exists. Managers are promoted by the owner inside the app.
+3. Adding someone to a team is direct (no invitation to accept).
+4. "Completed" counts when the assignee marks it. A lead can reopen a task with a reason (logged).
+5. Leads can edit, reassign and archive tasks; every change is logged.
 6. A completion note is required. File uploads and comments are deferred to a later phase.
-7. Members see only their own tasks.
-8. One team in v1; the schema supports more.
-9. Deadlines are date + time. "Due soon" = within 48 hours.
-10. Dashboards refresh on navigation and poll periodically; no realtime service.
-11. Completion rate = completed ÷ assigned (non-archived). On-time rate = completed by deadline ÷ completed.
+7. Employees see only their own tasks. Managers see only their own teams.
+8. Many teams (e.g. Tech, Business). Each team has one manager; a manager can run several teams; an employee is on one team.
+9. Subtasks: one level deep, always in the parent's team. Archiving a task archives its open subtasks.
+10. Deadlines are date + time. "Due soon" = within 48 hours.
+11. Dashboards refresh on navigation and poll periodically; no realtime service.
+12. Completion rate = completed ÷ assigned (non-archived). On-time rate = completed by deadline ÷ completed.
 
 ## Rules that must always hold (enforced on the server)
-- Only an admin can create, assign, reassign, edit, archive or reopen tasks.
-- A task can only be assigned to a current member of the admin's team.
-- Members can only read and update tasks where they are the assignee.
-- Members can change only the status (PENDING → IN_PROGRESS → COMPLETED) and the completion note.
-- Members cannot reach admin pages, admin data, or other members' tasks — including via direct API calls.
+- Scopes live in `src/server/access.ts`: the owner sees everything, a manager only teams they manage, an employee only tasks assigned to them.
+- A task can only be assigned to its team's manager or one of its employees — never to the owner, never across teams.
+- A manager can change (edit, reassign, archive, reopen) tasks in their teams, except tasks the owner created; those only the owner can change. A manager can still split them into subtasks.
+- Only the owner changes roles or a team's manager. Nobody can change their own role.
+- A manager can only add employees who are not on another team; the owner can move employees between teams.
+- Assignees can only read and update tasks assigned to them, and only the status (PENDING → IN_PROGRESS → COMPLETED) and the completion note.
+- Nobody can reach another role's pages or data — including via direct Server Action calls.
 - Lifecycle timestamps (assigned, started, completed) are set by the server only.
 - "Overdue" is derived (deadline passed and not completed), never stored.
 - Task history (`TaskActivity`) is append-only.
-- Removing a member from the team keeps their task history.
+- Removing someone from a team keeps their task history.
 
 ## Stack
 Next.js 16 (App Router, TypeScript) · PostgreSQL · Prisma 7 · Better Auth · Zod · Tailwind CSS v4 + shadcn/ui · Recharts.

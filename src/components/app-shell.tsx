@@ -13,6 +13,7 @@ import {
   Phone,
   UserCog,
   Users,
+  UsersRound,
 } from "lucide-react";
 import { APP_NAME, BrandMark, COMPANY } from "@/components/brand";
 import { AppFooter } from "@/components/site-footer";
@@ -43,6 +44,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { authClient } from "@/lib/auth-client";
+import { type AppRole, HOME_PATHS, WORKSPACE_LABELS } from "@/lib/roles";
 import { cn } from "@/lib/utils";
 
 const icons = {
@@ -50,6 +52,7 @@ const icons = {
   tasks: ClipboardList,
   myTasks: ListChecks,
   team: Users,
+  people: UsersRound,
   analytics: BarChart3,
   account: UserCog,
 };
@@ -64,7 +67,7 @@ export type NavItem = {
   exact?: boolean;
 };
 
-type ShellUser = { id: string; name: string; email: string; role: "ADMIN" | "MEMBER" };
+type ShellUser = { id: string; name: string; email: string; role: AppRole };
 
 function isActive(item: NavItem, pathname: string) {
   return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/");
@@ -82,7 +85,7 @@ export function AppShell({
   const pathname = usePathname();
   const router = useRouter();
   const accountItem: NavItem = {
-    href: user.role === "ADMIN" ? "/admin/account" : "/dashboard/account",
+    href: `${HOME_PATHS[user.role]}/account`,
     label: "Account settings",
     icon: "account",
   };
@@ -106,7 +109,7 @@ export function AppShell({
                   <div className="grid flex-1 text-left leading-tight">
                     <span className="truncate font-semibold text-white">{APP_NAME}</span>
                     <span className="truncate text-xs text-sidebar-foreground/60">
-                      {user.role === "ADMIN" ? "Admin workspace" : "Team member"}
+                      {user.role === "MEMBER" ? "Employee" : WORKSPACE_LABELS[user.role]}
                     </span>
                   </div>
                 </Link>
@@ -207,7 +210,7 @@ export function AppShell({
             <BrandMark className="size-8" />
           </Link>
           <Separator orientation="vertical" className="hidden data-[orientation=vertical]:h-8 md:block" />
-          {current && <PageTitle item={current} workspace={user.role === "ADMIN" ? "Admin workspace" : "My workspace"} />}
+          {current && <PageTitle item={current} workspace={WORKSPACE_LABELS[user.role]} />}
           <div className="ml-auto md:hidden">
             <DropdownMenu>
               <DropdownMenuTrigger className="rounded-full" aria-label="Account menu">

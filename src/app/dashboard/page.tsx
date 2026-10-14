@@ -24,7 +24,7 @@ import { WelcomeBanner } from "@/components/welcome-banner";
 import { APP_TIMEZONE, formatPercent } from "@/lib/format";
 import { computeMetrics } from "@/lib/tasks/metrics";
 import { completedOnTime, isOverdue, PRIORITY_RANK } from "@/lib/tasks/rules";
-import { requireMember } from "@/server/session";
+import { requireEmployee } from "@/server/session";
 import { listMyTasks } from "@/server/tasks";
 
 export const metadata: Metadata = { title: "My day" };
@@ -33,7 +33,7 @@ export const metadata: Metadata = { title: "My day" };
 const dayKey = (d: Date) => new Intl.DateTimeFormat("en-CA", { timeZone: APP_TIMEZONE }).format(d);
 
 export default async function MemberDashboardPage() {
-  const member = await requireMember();
+  const member = await requireEmployee();
   const tasks = await listMyTasks(member);
   const now = new Date();
   const m = computeMetrics(tasks, now);

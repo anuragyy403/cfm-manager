@@ -14,9 +14,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { sendPasswordResetAction } from "@/server/actions/admin";
+import { sendPasswordResetAction } from "@/server/actions/lead";
 
-/** Lets the admin email a locked-out member a link to choose a new password. */
+/** Lets a lead email a locked-out colleague a link to choose a new password. */
 export function SendResetButton({ userId, name, email }: { userId: string; name: string; email: string }) {
   const [open, setOpen] = useState(false);
   const [pending, startTransition] = useTransition();
