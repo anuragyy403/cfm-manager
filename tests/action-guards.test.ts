@@ -38,6 +38,8 @@ vi.mock("@/server/teams", () => ({
   ),
 }));
 
+vi.mock("@/server/password-reset", () => ({ sendMemberPasswordReset: touched }));
+
 beforeEach(() => touched.mockClear());
 
 describe("admin actions reject non-admins", async () => {

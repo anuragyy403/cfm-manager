@@ -61,6 +61,12 @@ export async function requireMember(): Promise<CurrentUser> {
   return user;
 }
 
+/** For sign-in / sign-up: someone already signed in goes to their dashboard. */
+export async function redirectIfSignedIn() {
+  const user = await getCurrentUser();
+  if (user) redirect(homePathFor(user.role));
+}
+
 export function homePathFor(role: Role) {
   return role === "ADMIN" ? "/admin" : "/dashboard";
 }

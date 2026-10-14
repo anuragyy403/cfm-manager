@@ -11,6 +11,7 @@ import {
   LogOut,
   Mail,
   Phone,
+  UserCog,
   Users,
 } from "lucide-react";
 import { APP_NAME, BrandMark, COMPANY } from "@/components/brand";
@@ -50,6 +51,7 @@ const icons = {
   myTasks: ListChecks,
   team: Users,
   analytics: BarChart3,
+  account: UserCog,
 };
 
 export type NavItem = {
@@ -79,7 +81,12 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const current = nav.find((n) => isActive(n, pathname));
+  const accountItem: NavItem = {
+    href: user.role === "ADMIN" ? "/admin/account" : "/dashboard/account",
+    label: "Account settings",
+    icon: "account",
+  };
+  const current = nav.find((n) => isActive(n, pathname)) ?? (isActive(accountItem, pathname) ? accountItem : undefined);
 
   async function signOut() {
     await authClient.signOut();
@@ -175,6 +182,12 @@ export function AppShell({
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link href={accountItem.href}>
+                      <UserCog />
+                      Account settings
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuItem onSelect={signOut}>
                     <LogOut />
                     Sign out
@@ -208,6 +221,12 @@ export function AppShell({
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem asChild>
+                  <Link href={accountItem.href}>
+                    <UserCog />
+                    Account settings
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem onSelect={signOut}>
                   <LogOut />
                   Sign out

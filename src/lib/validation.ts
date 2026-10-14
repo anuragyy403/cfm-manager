@@ -32,6 +32,37 @@ export const reopenSchema = z.object({
 
 export const idSchema = z.string().min(1).max(64);
 
+// ─── Account ────────────────────────────────────────────────────────────────
+
+/** Matches Better Auth's limits (min 8 set in `src/lib/auth.ts`, max 128 default). */
+export const passwordSchema = z.string().min(8, "At least 8 characters.").max(128, "At most 128 characters.");
+
+export const newPasswordSchema = z
+  .object({ newPassword: passwordSchema, confirmPassword: z.string() })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords don't match.",
+  });
+
+export const changePasswordSchema = z
+  .object({
+    currentPassword: z.string().min(1, "Enter your current password."),
+    newPassword: passwordSchema,
+    confirmPassword: z.string(),
+  })
+  .refine((d) => d.newPassword === d.confirmPassword, {
+    path: ["confirmPassword"],
+    message: "Passwords don't match.",
+  })
+  .refine((d) => d.newPassword !== d.currentPassword, {
+    path: ["newPassword"],
+    message: "Choose a password different from your current one.",
+  });
+
+export const profileSchema = z.object({
+  name: z.string().trim().min(2, "Enter your full name.").max(80, "At most 80 characters."),
+});
+
 export type ActionResult<T = undefined> =
   | ({ ok: true } & (T extends undefined ? object : { data: T }))
   | { ok: false; error: string; fieldErrors?: Record<string, string> };

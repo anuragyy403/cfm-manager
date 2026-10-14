@@ -1,8 +1,6 @@
-import { redirect } from "next/navigation";
 import { CheckCircle2, CircleDot, Clock, Sparkles } from "lucide-react";
 import { APP_NAME, Brand, BrandMark, COMPANY_NAME } from "@/components/brand";
 import { SiteFooter } from "@/components/site-footer";
-import { getCurrentUser, homePathFor } from "@/server/session";
 
 const highlights = [
   "Assign work to the right person in seconds",
@@ -10,10 +8,7 @@ const highlights = [
   "Track completion and on-time rates across the team",
 ];
 
-export default async function AuthLayout({ children }: { children: React.ReactNode }) {
-  const user = await getCurrentUser();
-  if (user) redirect(homePathFor(user.role));
-
+export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-svh flex-col">
       <div className="grid flex-1 lg:min-h-svh lg:grid-cols-[1.05fr_1fr]">

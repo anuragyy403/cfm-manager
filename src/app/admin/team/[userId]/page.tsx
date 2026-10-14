@@ -22,6 +22,7 @@ import { getMemberOverview } from "@/server/members";
 import { requireAdmin } from "@/server/session";
 import { getAdminTeam, listMemberOptions } from "@/server/teams";
 import { NewTaskButton } from "../../tasks/new-task-button";
+import { SendResetButton } from "./send-reset-button";
 
 export const metadata: Metadata = { title: "Member" };
 
@@ -57,11 +58,14 @@ export default async function MemberProfilePage({ params }: PageProps<"/admin/te
             </div>
           </div>
           {isMember && (
-            <NewTaskButton
-              members={memberOptions}
-              defaultAssigneeId={user.id}
-              label={`New task for ${user.name.split(" ")[0]}`}
-            />
+            <div className="flex flex-wrap items-center gap-2">
+              <SendResetButton userId={user.id} name={user.name} email={user.email} />
+              <NewTaskButton
+                members={memberOptions}
+                defaultAssigneeId={user.id}
+                label={`New task for ${user.name.split(" ")[0]}`}
+              />
+            </div>
           )}
         </div>
       </div>

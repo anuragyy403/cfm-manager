@@ -9,6 +9,7 @@ import {
   taskInputSchema,
   teamSchema,
 } from "@/lib/validation";
+import { sendMemberPasswordReset } from "@/server/password-reset";
 import { requireAdmin } from "@/server/session";
 import * as tasks from "@/server/tasks";
 import * as teams from "@/server/teams";
@@ -81,6 +82,17 @@ export async function removeMemberAction(userId: unknown): Promise<ActionResult>
   if (!res.ok) return res;
   refresh();
   return { ok: true };
+}
+
+/** Emails a team member a password reset link (for when they're locked out). */
+export async function sendPasswordResetAction(userId: unknown): Promise<ActionResult<{ email: string }>> {
+  const admin = await requireAdmin();
+  const id = idSchema.safeParse(userId);
+  if (!id.success) return { ok: false, error: "Invalid user." };
+  return run(async () => {
+    const { email } = await sendMemberPasswordReset(admin, id.data);
+    return { email };
+  });
 }
 
 // ─── Tasks ──────────────────────────────────────────────────────────────────
