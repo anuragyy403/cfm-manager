@@ -9,7 +9,7 @@ export default async function EmployeeAccountPage() {
   const user = await requireEmployee();
   return (
     <>
-      <PageHeader title="Account settings" description="Update your name and password." />
+      <PageHeader title="Account settings" description="Your name, password and the phone app." />
       <AccountSettings user={{ name: user.name, email: user.email, username: user.username }} />
     </>
   );

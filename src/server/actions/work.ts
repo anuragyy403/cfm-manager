@@ -1,7 +1,9 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { type ActionResult, completionSchema, fieldErrorsOf, idSchema } from "@/lib/validation";
+import { notifyTaskCompleted } from "@/server/push";
 import { requireAssignee } from "@/server/session";
 import { completeMyTask, startMyTask } from "@/server/tasks";
 import { run } from "./result";
@@ -32,6 +34,7 @@ export async function completeTaskAction(taskId: unknown, input: unknown): Promi
   }
   const res = await run(() => completeMyTask(user, id.data, parsed.data.note));
   if (!res.ok) return res;
+  after(() => notifyTaskCompleted(id.data, user));
   refresh();
   return { ok: true };
 }

@@ -9,7 +9,7 @@ export default async function ManagerAccountPage() {
   const user = await requireManager();
   return (
     <>
-      <PageHeader title="Account settings" description="Update your name and password." />
+      <PageHeader title="Account settings" description="Your name, password and the phone app." />
       <AccountSettings user={{ name: user.name, email: user.email, username: user.username }} />
     </>
   );

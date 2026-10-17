@@ -222,6 +222,7 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
   });
 }
 
+/** Returns the task and whether it went to a new assignee (they get notified). */
 export async function updateTask(viewer: CurrentUser, taskId: string, input: TaskUpdateInput) {
   const existing = await findManageableTask(viewer, taskId);
   if (existing.archivedAt) throw new DomainError("Restore this task before editing it.");
@@ -241,7 +242,7 @@ export async function updateTask(viewer: CurrentUser, taskId: string, input: Tas
   if (input.priority !== existing.priority) changed.push("priority");
   if (dueAt.getTime() !== existing.dueAt.getTime()) changed.push("deadline");
 
-  if (!reassigned && changed.length === 0) return existing;
+  if (!reassigned && changed.length === 0) return { task: existing, reassigned };
 
   const activities: Prisma.TaskActivityCreateManyTaskInput[] = [];
   if (changed.length) {
@@ -269,7 +270,7 @@ export async function updateTask(viewer: CurrentUser, taskId: string, input: Tas
     });
   }
 
-  return prisma.task.update({
+  const task = await prisma.task.update({
     where: { id: existing.id },
     data: {
       title: input.title,
@@ -281,6 +282,7 @@ export async function updateTask(viewer: CurrentUser, taskId: string, input: Tas
       activities: { createMany: { data: activities } },
     },
   });
+  return { task, reassigned };
 }
 
 /** Archiving a task also archives its open subtasks; restoring brings back only the task. */

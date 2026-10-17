@@ -14,7 +14,17 @@ const nextConfig: NextConfig = {
   // 90 is used for the sign-in office photo, where 75 visibly softens the detail.
   images: { qualities: [75, 90] },
   async headers() {
-    return [{ source: "/:path*", headers: securityHeaders }];
+    return [
+      { source: "/:path*", headers: securityHeaders },
+      // Always fetch the latest service worker so fixes reach phones right away.
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Content-Security-Policy", value: "default-src 'self'; script-src 'self'" },
+        ],
+      },
+    ];
   },
   turbopack: {
     rules: {

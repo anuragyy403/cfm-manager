@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PhoneAppCard } from "@/components/pwa/phone-app-card";
 import { authClient } from "@/lib/auth-client";
 import { changePasswordSchema, profileSchema } from "@/lib/validation";
 
@@ -19,6 +20,7 @@ export function AccountSettings({ user }: { user: AccountUser }) {
   return (
     <div className="grid max-w-2xl gap-6">
       <ProfileCard user={user} />
+      <PhoneAppCard />
       <PasswordCard />
     </div>
   );

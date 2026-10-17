@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import {
   type ActionResult,
   fieldErrorsOf,
@@ -11,6 +12,7 @@ import {
   teamSchema,
 } from "@/lib/validation";
 import { sendMemberPasswordReset } from "@/server/password-reset";
+import { notifyTaskAssigned } from "@/server/push";
 import { requireLead } from "@/server/session";
 import * as tasks from "@/server/tasks";
 import * as teams from "@/server/teams";
@@ -107,7 +109,10 @@ export async function createTaskAction(input: unknown): Promise<ActionResult<{ i
     const task = await tasks.createTask(lead, parsed.data);
     return { id: task.id };
   });
-  if (res.ok) refresh();
+  if (res.ok) {
+    after(() => notifyTaskAssigned(res.data.id, lead));
+    refresh();
+  }
   return res;
 }
 
@@ -119,6 +124,7 @@ export async function updateTaskAction(taskId: unknown, input: unknown): Promise
   if (!parsed.success) return { ok: false, error: INVALID_FIELDS, fieldErrors: fieldErrorsOf(parsed.error) };
   const res = await run(() => tasks.updateTask(lead, id.data, parsed.data));
   if (!res.ok) return res;
+  if (res.data.reassigned) after(() => notifyTaskAssigned(res.data.task.id, lead, true));
   refresh();
   return { ok: true };
 }

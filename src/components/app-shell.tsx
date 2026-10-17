@@ -19,6 +19,8 @@ import {
   UsersRound,
 } from "lucide-react";
 import { APP_NAME, BrandMark, COMPANY } from "@/components/brand";
+import { NotificationBanner } from "@/components/pwa/notification-banner";
+import { unsubscribeDevice } from "@/components/pwa/pwa";
 import { AppFooter } from "@/components/site-footer";
 import { UserAvatar } from "@/components/user-avatar";
 import {
@@ -113,6 +115,8 @@ export function AppShell({
   const onHome = pathname === base;
 
   async function signOut() {
+    // Stop this device's notifications first, so whoever signs in next here doesn't get them.
+    await Promise.race([unsubscribeDevice().catch(() => {}), new Promise((r) => setTimeout(r, 3000))]);
     await authClient.signOut();
     router.replace("/sign-in");
     router.refresh();
@@ -255,7 +259,10 @@ export function AppShell({
             </div>
           </div>
         </header>
-        <div className="flex-1 p-4 pb-24 md:p-6 md:pb-6 lg:p-8">{children}</div>
+        <div className="flex-1 p-4 pb-24 md:p-6 md:pb-6 lg:p-8">
+          <NotificationBanner role={user.role} accountHref={accountItem.href} />
+          {children}
+        </div>
         <AppFooter className="mb-16 border-sun-line/70 md:mb-0" />
       </SidebarInset>
 
