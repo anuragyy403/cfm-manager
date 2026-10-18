@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   ClipboardList,
   Clock,
   Hourglass,
@@ -27,6 +28,7 @@ import { NewTaskButton } from "@/components/workspace/new-task-button";
 import { ReviewQueueCard } from "@/components/workspace/review-queue-card";
 import { NewTeamButton } from "@/components/workspace/team-dialogs";
 import { formatPercent } from "@/lib/format";
+import { cn } from "@/lib/utils";
 import { computeMetrics } from "@/lib/tasks/metrics";
 import { listPeople } from "@/server/people";
 import { requireOwner } from "@/server/session";
@@ -114,189 +116,174 @@ export default async function OwnerOverviewPage() {
 
       <GettingStarted steps={steps} />
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
-        <StatCard
-          label="Total tasks"
-          value={m.total}
-          icon={ClipboardList}
-          hint={`${m.inProgress} in progress · ${m.pending} not started`}
-        />
-        <StatCard
-          label="In review"
-          value={m.inReview}
-          icon={Hourglass}
-          tone={m.inReview ? "violet" : "default"}
-          hint={toReview.length ? `${toReview.length} waiting for you` : "Handed in, being checked"}
-        />
-        <StatCard label="Passed" value={m.completed} icon={CheckCircle2} tone="green" hint={`${formatPercent(m.firstTimePassRate)} first time`} />
-        <StatCard label="Overdue" value={m.overdue} icon={AlertTriangle} tone={m.overdue ? "red" : "default"} />
-        <StatCard label="Completion rate" value={formatPercent(m.completionRate)} icon={Target} tone="orange" />
-        <StatCard
-          label="On-time rate"
-          value={formatPercent(m.onTimeRate)}
-          icon={Clock}
-          tone="amber"
-          hint={`${m.completedLate} completed late`}
-        />
-      </div>
+      <div className="space-y-6">
+        {/* 1. Teams first: the owner sees each team at a glance and opens the one to check. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Teams at a glance</CardTitle>
+            <CardDescription>Teams with overdue work or low completion come first. Open a team to see what&apos;s happening.</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/admin/teams">
+                  All teams <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {rankedTeams.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <EmptyIllustration kind="team" className="h-24" />
+                <p className="text-sm text-muted-foreground">No teams yet.</p>
+              </div>
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {rankedTeams.map((t) => (
+                  <li key={t.id}>
+                    <TeamGlanceCard team={t} ownerId={owner.id} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-      <div className="grid gap-6 xl:grid-cols-3">
-        <div className="min-w-0 space-y-6 xl:col-span-2">
-          <ReviewQueueCard
-            tasks={toReview}
-            base="/admin"
-            description="Your managers' own work. Their teams' work is reviewed by the managers."
-          />
-          <Card>
-            <CardHeader>
-              <CardTitle>Teams at a glance</CardTitle>
-              <CardDescription>Teams with overdue work or low completion appear first.</CardDescription>
-              <CardAction>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/teams">
-                    All teams <ArrowRight />
-                  </Link>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              {rankedTeams.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-center">
-                  <EmptyIllustration kind="team" className="h-24" />
-                  <p className="text-sm text-muted-foreground">No teams yet.</p>
-                </div>
-              ) : (
-                <ul className="grid gap-3 sm:grid-cols-2">
-                  {rankedTeams.map((t) => (
-                    <li key={t.id}>
+        {/* 2. Company-wide numbers. */}
+        <section aria-labelledby="records-heading">
+          <div className="mb-3 flex items-end justify-between gap-3 px-1">
+            <div>
+              <h2 id="records-heading" className="font-semibold">
+                All records
+              </h2>
+              <p className="text-sm text-muted-foreground">Every team&apos;s active tasks together.</p>
+            </div>
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/admin/analytics">
+                Analytics <ArrowRight />
+              </Link>
+            </Button>
+          </div>
+          <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 2xl:grid-cols-6">
+            <StatCard
+              label="Total tasks"
+              value={m.total}
+              icon={ClipboardList}
+              hint={`${m.inProgress} in progress · ${m.pending} not started`}
+            />
+            <StatCard
+              label="In review"
+              value={m.inReview}
+              icon={Hourglass}
+              tone={m.inReview ? "violet" : "default"}
+              hint={toReview.length ? `${toReview.length} waiting for you` : "Handed in, being checked"}
+            />
+            <StatCard label="Passed" value={m.completed} icon={CheckCircle2} tone="green" hint={`${formatPercent(m.firstTimePassRate)} first time`} />
+            <StatCard label="Overdue" value={m.overdue} icon={AlertTriangle} tone={m.overdue ? "red" : "default"} />
+            <StatCard label="Completion rate" value={formatPercent(m.completionRate)} icon={Target} tone="orange" />
+            <StatCard
+              label="On-time rate"
+              value={formatPercent(m.onTimeRate)}
+              icon={Clock}
+              tone="amber"
+              hint={`${m.completedLate} completed late`}
+            />
+          </div>
+        </section>
+
+        {/* Only when a manager's own work is waiting for the owner. */}
+        <ReviewQueueCard
+          tasks={toReview}
+          base="/admin"
+          description="Your managers' own work. Their teams' work is reviewed by the managers."
+        />
+
+        {/* 3. What needs the owner's attention. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Needs attention</CardTitle>
+            <CardDescription>Open tasks across every team that are overdue or due in the next 48 hours.</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/admin/tasks?view=OVERDUE">
+                  Overdue <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {attention.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 py-6 text-center">
+                <EmptyIllustration kind="done" className="h-24" />
+                <p className="font-medium">Nothing urgent</p>
+                <p className="text-sm text-muted-foreground">Every open task is on track.</p>
+              </div>
+            ) : (
+              attention.map((t) => (
+                <TaskListItem key={t.id} task={t} href={`/admin/tasks/${t.id}`} assignee={t.assignee} context={t.team.name} />
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* 4. The managers. */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Managers</CardTitle>
+            <CardDescription>Each manager&apos;s teams and the work assigned to them personally.</CardDescription>
+            <CardAction>
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/admin/people">
+                  All people <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
+          </CardHeader>
+          <CardContent>
+            {managers.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No managers yet. Promote an employee from{" "}
+                <Link href="/admin/people" className="font-medium text-brand-orange-hover hover:underline">
+                  People
+                </Link>{" "}
+                or from a team&apos;s page.
+              </p>
+            ) : (
+              <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {managers.map((p) => {
+                  const pm = p.metrics;
+                  const open = pm.pending + pm.inProgress + pm.overdue;
+                  return (
+                    <li key={p.id}>
                       <Link
-                        href={`/admin/teams/${t.id}`}
-                        className="flex flex-col gap-3 rounded-xl border p-4 transition-all hover:-translate-y-px hover:shadow-md"
+                        href={`/admin/people/${p.id}`}
+                        className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-all hover:-translate-y-px hover:shadow-md"
                       >
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate font-medium">{t.name}</span>
-                          {t.metrics.overdue > 0 ? (
-                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
-                              {t.metrics.overdue} overdue
-                            </span>
-                          ) : (
-                            <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                              {t.metrics.completed}/{t.metrics.total} done
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <UserAvatar name={t.manager.name} id={t.manager.id} size="xs" />
-                          <span className="truncate">
-                            {t.manager.id === owner.id ? "Managed by you" : t.manager.name}
-                          </span>
-                          <span className="ml-auto flex items-center gap-1">
-                            <Users className="size-3.5" />
-                            {t._count.members}
+                        <UserAvatar name={p.name} id={p.id} size="md" />
+                        <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
+                          <span className="truncate font-medium">{p.name}</span>
+                          <span className="truncate text-xs text-muted-foreground">
+                            {p.managedTeams.length ? p.managedTeams.map((t) => t.name).join(", ") : "No team yet"}
                           </span>
                         </div>
-                        <Progress
-                          value={(t.metrics.completionRate ?? 0) * 100}
-                          className="h-1.5 **:data-[slot=progress-indicator]:bg-brand-orange"
-                        />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Needs attention</CardTitle>
-              <CardDescription>Open tasks across every team that are overdue or due in the next 48 hours.</CardDescription>
-              <CardAction>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/tasks?view=OVERDUE">
-                    Overdue tasks <ArrowRight />
-                  </Link>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {attention.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-6 text-center">
-                  <EmptyIllustration kind="done" className="h-24" />
-                  <p className="font-medium">Nothing urgent</p>
-                  <p className="text-sm text-muted-foreground">Every open task is on track.</p>
-                </div>
-              ) : (
-                attention.map((t) => (
-                  <TaskListItem
-                    key={t.id}
-                    task={t}
-                    href={`/admin/tasks/${t.id}`}
-                    assignee={t.assignee}
-                    context={t.team.name}
-                  />
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Managers</CardTitle>
-              <CardDescription>Each manager&apos;s teams and the work assigned to them personally.</CardDescription>
-              <CardAction>
-                <Button asChild variant="ghost" size="sm">
-                  <Link href="/admin/people">
-                    All people <ArrowRight />
-                  </Link>
-                </Button>
-              </CardAction>
-            </CardHeader>
-            <CardContent>
-              {managers.length === 0 ? (
-                <p className="text-sm text-muted-foreground">
-                  No managers yet. Promote an employee from{" "}
-                  <Link href="/admin/people" className="font-medium text-brand-orange-hover hover:underline">
-                    People
-                  </Link>{" "}
-                  or from a team&apos;s page.
-                </p>
-              ) : (
-                <ul className="-mx-2 divide-y divide-sun-line/70">
-                  {managers.map((p) => {
-                    const pm = p.metrics;
-                    return (
-                      <li key={p.id} className="py-1.5 first:pt-0 last:pb-0">
-                        <Link
-                          href={`/admin/people/${p.id}`}
-                          className="flex items-center gap-3 rounded-xl px-2 py-2.5 transition-colors hover:bg-sun-raised"
-                        >
-                          <UserAvatar name={p.name} id={p.id} />
-                          <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
-                            <span className="truncate font-medium">{p.name}</span>
-                            <span className="truncate text-xs text-muted-foreground">
-                              {p.managedTeams.length ? p.managedTeams.map((t) => t.name).join(", ") : "No team yet"}
-                            </span>
-                          </div>
-                          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                            {pm.pending + pm.inProgress + pm.overdue} open
-                          </span>
+                        <div className="flex shrink-0 flex-col items-end gap-1">
+                          <span className="text-xs text-muted-foreground tabular-nums">{open} open</span>
                           {pm.overdue > 0 && (
-                            <span className="shrink-0 rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
+                            <span className="rounded-full bg-red-100 px-2 py-0.5 text-[11px] font-medium text-red-700 dark:bg-red-950 dark:text-red-300">
                               {pm.overdue} overdue
                             </span>
                           )}
-                        </Link>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                        </div>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
 
-        <Card className="h-fit">
+        {/* 5. Latest updates. */}
+        <Card>
           <CardHeader>
             <CardTitle>Recent activity</CardTitle>
             <CardDescription>Latest updates from every team.</CardDescription>
@@ -307,6 +294,66 @@ export default async function OwnerOverviewPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+type GlanceTeam = Awaited<ReturnType<typeof listTeamsWithMetrics>>[number];
+
+/** One team on the owner's overview: who runs it, how it's doing, and what's open. */
+function TeamGlanceCard({ team: t, ownerId }: { team: GlanceTeam; ownerId: string }) {
+  const tm = t.metrics;
+  const open = tm.pending + tm.inProgress + tm.overdue;
+  const figures = [
+    { label: "Open", value: open, tone: "text-foreground" },
+    { label: "In review", value: tm.inReview, tone: tm.inReview ? "text-violet-600 dark:text-violet-400" : "text-foreground" },
+    { label: "Overdue", value: tm.overdue, tone: tm.overdue ? "text-red-600 dark:text-red-400" : "text-foreground" },
+    { label: "Done", value: formatPercent(tm.completionRate), tone: "text-foreground" },
+  ];
+  return (
+    <Link
+      href={`/admin/teams/${t.id}`}
+      className={cn(
+        "group flex h-full flex-col gap-4 rounded-2xl border bg-card p-4 transition-all hover:-translate-y-0.5 hover:shadow-md",
+        tm.overdue > 0 && "border-red-200 dark:border-red-900",
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-brand-navy text-white">
+          <Users className="size-5" />
+        </span>
+        <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
+          <span className="truncate font-semibold">{t.name}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
+            <UserAvatar name={t.manager.name} id={t.manager.id} size="xs" />
+            <span className="truncate">{t.manager.id === ownerId ? "Managed by you" : t.manager.name}</span>
+            <span aria-hidden>·</span>
+            <span className="shrink-0">
+              {t._count.members} {t._count.members === 1 ? "employee" : "employees"}
+            </span>
+          </span>
+        </div>
+        <ChevronRight className="mt-1 size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
+      </div>
+
+      <dl className="grid grid-cols-4 gap-2 rounded-xl bg-muted/50 p-2.5 text-center">
+        {figures.map((f) => (
+          <div key={f.label} className="grid gap-0.5">
+            <dt className="text-[11px] text-muted-foreground">{f.label}</dt>
+            <dd className={cn("text-lg font-semibold tabular-nums", f.tone)}>{f.value}</dd>
+          </div>
+        ))}
+      </dl>
+
+      <div className="space-y-1.5">
+        <Progress
+          value={(tm.completionRate ?? 0) * 100}
+          className="h-1.5 **:data-[slot=progress-indicator]:bg-brand-orange"
+        />
+        <p className="text-xs text-muted-foreground tabular-nums">
+          {tm.completed} of {tm.total} tasks passed
+        </p>
+      </div>
+    </Link>
   );
 }
 
