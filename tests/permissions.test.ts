@@ -431,6 +431,32 @@ describe("manager review", () => {
   });
 });
 
+describe("a person's record across teams", () => {
+  it("moving to another team keeps the work done before, once per person", async () => {
+    const before = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, before.id, "Delivered in Tech.");
+    await reviewTask(mia, before.id, "PASS", null);
+
+    await addMember(owner, business, alice.id); // the owner moves Alice to Business
+    await createTask(noah, newTask(alice.id, business));
+
+    // Owner: one row for Alice with both tasks, wherever she is now.
+    const ownerPeople = (await getTeamAnalytics(owner))!.people.filter((p) => p.user.id === alice.id);
+    expect(ownerPeople).toHaveLength(1);
+    expect(ownerPeople[0]!.metrics).toMatchObject({ total: 2, completed: 1 });
+    expect(ownerPeople[0]!.currentTeams).toEqual(["Business"]);
+
+    // Tech's manager still sees what she did in Tech, as a former member.
+    const inTech = (await getTeamAnalytics(mia))!.people.find((p) => p.user.id === alice.id)!;
+    expect(inTech.metrics).toMatchObject({ total: 1, completed: 1 });
+    expect(inTech.currentTeams).toEqual([]);
+
+    // Business's manager sees only Business work.
+    const inBusiness = (await getTeamAnalytics(noah))!.people.find((p) => p.user.id === alice.id)!;
+    expect(inBusiness.metrics).toMatchObject({ total: 1, completed: 0 });
+  });
+});
+
 describe("teams and people", () => {
   it("a manager can create their own team and becomes its manager", async () => {
     const team = await createTeam(mia, { name: "Design", description: "", managerId: noah.id });

@@ -20,7 +20,7 @@ import { formatDate, formatDuration } from "@/lib/format";
 import type { TaskMetrics } from "@/lib/tasks/metrics";
 import { cn } from "@/lib/utils";
 import { isOwner } from "@/server/access";
-import { getTeamAnalytics, getWeeklyTrend, type MemberPerformance } from "@/server/analytics";
+import { getTeamAnalytics, getWeeklyTrend, type PersonPerformance } from "@/server/analytics";
 import type { CurrentUser } from "@/server/session";
 import { listTeams } from "@/server/teams";
 
@@ -111,12 +111,16 @@ export async function AnalyticsView({
   }
 
   const t = analytics.team;
-  const canOpen = (m: MemberPerformance) => owner || !m.isManager;
-  const personHref = (m: MemberPerformance) => (canOpen(m) ? `${base}/people/${m.user.id}` : undefined);
-  const roleOf = (m: MemberPerformance) => (m.isManager ? "Manager" : "Employee");
+  // Managers open employee profiles only; the owner can open anyone's.
+  const personHref = (p: PersonPerformance) =>
+    owner || p.role === "MEMBER" ? `${base}/people/${p.user.id}` : undefined;
+  const roleOf = (p: PersonPerformance) => (p.role === "MANAGER" ? "Manager" : "Employee");
+  // Where they are now; their record still counts work from earlier teams.
+  const whereNow = (p: PersonPerformance) =>
+    p.currentTeams.length ? p.currentTeams.join(", ") : "No longer on these teams";
 
   // ─── Highlights ────────────────────────────────────────────────────────────
-  const performers = analytics.members
+  const performers = analytics.people
     .filter((m) => m.metrics.completed > 0)
     .sort(
       (a, b) =>
@@ -125,7 +129,7 @@ export async function AnalyticsView({
         b.metrics.completed - a.metrics.completed,
     )
     .slice(0, 4);
-  const attention = analytics.members
+  const attention = analytics.people
     .filter((m) => m.metrics.overdue > 0 || (m.metrics.onTimeRate !== null && m.metrics.onTimeRate < 0.5))
     .sort((a, b) => b.metrics.overdue - a.metrics.overdue || (a.metrics.onTimeRate ?? 1) - (b.metrics.onTimeRate ?? 1))
     .slice(0, 4);
@@ -136,9 +140,9 @@ export async function AnalyticsView({
       label: "Top performers",
       empty: "Nobody has completed a task in this period yet.",
       items: performers.map((m) => ({
-        id: `${m.team.id}:${m.user.id}`,
+        id: m.user.id,
         title: m.user.name,
-        subtitle: multiTeam ? `${m.team.name} · ${roleOf(m)}` : roleOf(m),
+        subtitle: multiTeam ? `${whereNow(m)} · ${roleOf(m)}` : roleOf(m),
         chips: [`${m.metrics.completed}/${m.metrics.total} done`, `${pct(m.metrics.onTimeRate)} on time`],
         href: personHref(m),
         person: { id: m.user.id, name: m.user.name },
@@ -149,9 +153,9 @@ export async function AnalyticsView({
       label: "Needs attention",
       empty: "Nobody is behind. Every deadline is on track.",
       items: attention.map((m) => ({
-        id: `${m.team.id}:${m.user.id}`,
+        id: m.user.id,
         title: m.user.name,
-        subtitle: multiTeam ? `${m.team.name} · ${roleOf(m)}` : roleOf(m),
+        subtitle: multiTeam ? `${whereNow(m)} · ${roleOf(m)}` : roleOf(m),
         chips: [
           ...(m.metrics.overdue ? [`${m.metrics.overdue} overdue`] : []),
           `${pct(m.metrics.onTimeRate)} on time`,
@@ -193,28 +197,22 @@ export async function AnalyticsView({
   const delta = recent - earlier;
 
   // ─── People ────────────────────────────────────────────────────────────────
-  const rows: PersonRow[] = [...analytics.members]
-    .sort((a, b) => Number(b.isManager) - Number(a.isManager) || b.metrics.total - a.metrics.total)
-    .map((m) => ({
-      key: `${m.team.id}:${m.user.id}`,
-      id: m.user.id,
-      name: m.user.name,
-      username: m.user.username,
-      isManager: m.isManager,
-      isYou: m.user.id === viewer.id,
-      team: m.team.name,
-      href: personHref(m),
-      total: m.metrics.total,
-      completed: m.metrics.completed,
-      inReview: m.metrics.inReview,
-      inProgress: m.metrics.inProgress,
-      pending: m.metrics.pending,
-      overdue: m.metrics.overdue,
-      completionRate: m.metrics.completionRate,
-      onTimeRate: m.metrics.onTimeRate,
-      firstTimePassRate: m.metrics.firstTimePassRate,
-      avgTime: formatDuration(m.metrics.avgCompletionMs),
-    }));
+  const rows: PersonRow[] = analytics.people.map((p) => ({
+    id: p.user.id,
+    name: p.user.name,
+    username: p.user.username,
+    isYou: p.user.id === viewer.id,
+    search: p.currentTeams.join(" "),
+    href: personHref(p),
+    total: p.metrics.total,
+    completed: p.metrics.completed,
+    inReview: p.metrics.inReview,
+    overdue: p.metrics.overdue,
+    completionRate: p.metrics.completionRate,
+    onTimeRate: p.metrics.onTimeRate,
+    firstTimePassRate: p.metrics.firstTimePassRate,
+    avgTime: formatDuration(p.metrics.avgCompletionMs),
+  }));
 
   const firstName = viewer.name.split(" ")[0];
 
@@ -350,7 +348,7 @@ export async function AnalyticsView({
 
         {/* People */}
         <div className="md:col-span-2 xl:col-span-12">
-          <PeopleTable rows={rows} showTeam={multiTeam && !teamId} />
+          <PeopleTable rows={rows} />
         </div>
       </div>
     </div>

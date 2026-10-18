@@ -44,7 +44,7 @@ export async function PeopleView({ owner, base }: { owner: CurrentUser; base: st
         />
         <PeopleTable
           title="Employees"
-          description="Employees see only the tasks assigned to them."
+          description="Employees see only the tasks assigned to them. Their numbers include work from every team they have been on."
           empty="No employees yet. They appear here after they sign up."
           people={employees}
           base={base}
@@ -82,6 +82,8 @@ function PeopleTable({
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Team</TableHead>
+                <TableHead className="text-right">Tasks</TableHead>
+                <TableHead className="text-right">Passed</TableHead>
                 <TableHead className="text-right">Open</TableHead>
                 <TableHead className="text-right">Overdue</TableHead>
                 <TableHead className="w-44">Completion rate</TableHead>
@@ -122,6 +124,8 @@ function PeopleTable({
                         </div>
                       )}
                     </TableCell>
+                    <TableCell className="text-right tabular-nums">{m.total}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.completed}</TableCell>
                     <TableCell className="text-right tabular-nums">{m.pending + m.inProgress + m.overdue}</TableCell>
                     <TableCell className="text-right tabular-nums">
                       {m.overdue > 0 ? (

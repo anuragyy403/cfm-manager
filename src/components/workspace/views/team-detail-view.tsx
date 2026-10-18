@@ -39,6 +39,8 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
   const t = analytics!.team;
   const managerRow = analytics!.members.find((m) => m.isManager);
   const employees = analytics!.members.filter((m) => !m.isManager);
+  // Did work in this team but are no longer on it: their work here stays visible.
+  const formerMembers = analytics!.people.filter((p) => p.currentTeams.length === 0 && p.metrics.total > 0);
 
   return (
     <>
@@ -139,7 +141,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                   <TableHead>Employee</TableHead>
                   <TableHead className="text-right">Assigned</TableHead>
                   <TableHead className="text-right">In progress</TableHead>
-                  <TableHead className="text-right">Completed</TableHead>
+                  <TableHead className="text-right">Passed</TableHead>
                   <TableHead className="text-right">Overdue</TableHead>
                   <TableHead className="w-44">Completion rate</TableHead>
                   <TableHead className="text-right">On time</TableHead>
@@ -196,6 +198,64 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
           )}
         </CardContent>
       </Card>
+
+      {formerMembers.length > 0 && (
+        <Card className="mt-6">
+          <CardHeader>
+            <CardTitle>Former members</CardTitle>
+            <CardDescription>
+              People who did work in {team.name} before moving or leaving. Their work here still counts.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead className="text-right">Assigned</TableHead>
+                  <TableHead className="text-right">Passed</TableHead>
+                  <TableHead className="text-right">Overdue</TableHead>
+                  <TableHead className="w-44">Completion rate</TableHead>
+                  <TableHead className="text-right">On time</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {formerMembers.map(({ user, role, metrics }) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">
+                      {owner || role === "MEMBER" ? (
+                        <Link href={`${base}/people/${user.id}`} className="hover:underline">
+                          {user.name}
+                        </Link>
+                      ) : (
+                        user.name
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{metrics.total}</TableCell>
+                    <TableCell className="text-right tabular-nums">{metrics.completed}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {metrics.overdue > 0 ? (
+                        <span className="font-medium text-red-600 dark:text-red-400">{metrics.overdue}</span>
+                      ) : (
+                        0
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Progress value={(metrics.completionRate ?? 0) * 100} className="h-2" />
+                        <span className="w-10 text-right text-xs tabular-nums text-muted-foreground">
+                          {formatPercent(metrics.completionRate)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{formatPercent(metrics.onTimeRate)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
     </>
   );
 }

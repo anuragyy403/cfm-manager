@@ -3,6 +3,7 @@ import { startOfWeek, subWeeks, addWeeks } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { completedOnTime } from "@/lib/tasks/rules";
 import { computeMetrics, type TaskMetrics } from "@/lib/tasks/metrics";
+import type { Role } from "@/generated/prisma/client";
 import type { CurrentUser } from "@/server/session";
 import { taskScope, teamScope } from "@/server/access";
 
@@ -23,10 +24,26 @@ export type TeamPerformance = {
   metrics: TaskMetrics;
 };
 
+/**
+ * One person's overall record: every task they were given in the teams in
+ * scope, whichever team they're on now. Moving someone to another team never
+ * hides the work they did before.
+ */
+export type PersonPerformance = {
+  user: { id: string; name: string; username: string | null; email: string };
+  role: Role;
+  /** Teams in scope they're on now (as employee or manager); empty if they've left. */
+  currentTeams: string[];
+  metrics: TaskMetrics;
+};
+
 export type TeamAnalytics = {
   /** All tasks in scope together. */
   team: TaskMetrics;
+  /** Per team: its current manager and employees (for team views). */
   members: MemberPerformance[];
+  /** Per person, across teams (for people performance). */
+  people: PersonPerformance[];
   teams: TeamPerformance[];
 };
 
@@ -107,9 +124,38 @@ export async function getTeamAnalytics(
     }
   }
 
+  // Everyone with work in scope (current or former members), plus current
+  // members who have none yet. The owner is never assigned work.
+  const byAssignee = new Map<string, typeof tasks>();
+  for (const t of tasks) byAssignee.set(t.assigneeId, [...(byAssignee.get(t.assigneeId) ?? []), t]);
+  const personIds = new Set(byAssignee.keys());
+  for (const team of teams) {
+    if (team.manager.role === "MANAGER") personIds.add(team.manager.id);
+    for (const m of team.members) personIds.add(m.user.id);
+  }
+  const currentTeams = new Map<string, string[]>();
+  for (const team of teams) {
+    for (const id of [team.manager.id, ...team.members.map((m) => m.user.id)]) {
+      currentTeams.set(id, [...(currentTeams.get(id) ?? []), team.name]);
+    }
+  }
+  const users = await prisma.user.findMany({
+    where: { id: { in: [...personIds] }, role: { not: "ADMIN" } },
+    select: { id: true, name: true, username: true, email: true, role: true },
+  });
+  const people: PersonPerformance[] = users
+    .map(({ role, ...user }) => ({
+      user,
+      role,
+      currentTeams: currentTeams.get(user.id) ?? [],
+      metrics: computeMetrics(byAssignee.get(user.id) ?? [], now),
+    }))
+    .sort((a, b) => b.metrics.total - a.metrics.total || a.user.name.localeCompare(b.user.name));
+
   return {
     team: computeMetrics(tasks, now),
     members,
+    people,
     teams: teams.map((t) => ({
       id: t.id,
       name: t.name,
