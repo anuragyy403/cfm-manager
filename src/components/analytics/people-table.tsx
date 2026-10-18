@@ -21,8 +21,6 @@ export type PersonRow = {
   overdue: number;
   completionRate: number | null;
   onTimeRate: number | null;
-  /** Passed without being sent back, of everything passed. */
-  firstTimePassRate: number | null;
   avgTime: string;
 };
 
@@ -65,7 +63,7 @@ export function PeopleTable({ rows }: { rows: PersonRow[] }) {
       </div>
 
       <div className="overflow-x-auto px-3 pb-3">
-        <table className="w-full min-w-[820px] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[740px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
               <Th className="rounded-l-xl pl-4">Name</Th>
@@ -75,7 +73,6 @@ export function PeopleTable({ rows }: { rows: PersonRow[] }) {
               <Th className="text-right">Overdue</Th>
               <Th className="text-right">Completion</Th>
               <Th className="text-right">On time</Th>
-              <Th className="text-right">First time</Th>
               <Th className="text-right">Avg. time</Th>
               <Th>Status</Th>
               <Th className="rounded-r-xl pr-4 text-right">
@@ -86,7 +83,7 @@ export function PeopleTable({ rows }: { rows: PersonRow[] }) {
           <tbody>
             {shown.length === 0 && (
               <tr>
-                <td colSpan={11} className="py-10 text-center text-sm text-muted-foreground">
+                <td colSpan={10} className="py-10 text-center text-sm text-muted-foreground">
                   {rows.length === 0 ? "No one gets work here yet." : `No one matches “${q.trim()}”.`}
                 </td>
               </tr>
@@ -115,7 +112,6 @@ export function PeopleTable({ rows }: { rows: PersonRow[] }) {
                   </Td>
                   <Td className="text-right tabular-nums">{pct(r.completionRate)}</Td>
                   <Td className="text-right tabular-nums">{pct(r.onTimeRate)}</Td>
-                  <Td className="text-right tabular-nums">{pct(r.firstTimePassRate)}</Td>
                   <Td className="text-right whitespace-nowrap tabular-nums text-muted-foreground">{r.avgTime}</Td>
                   <Td>
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">

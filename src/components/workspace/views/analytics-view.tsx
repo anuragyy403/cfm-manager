@@ -210,7 +210,6 @@ export async function AnalyticsView({
     overdue: p.metrics.overdue,
     completionRate: p.metrics.completionRate,
     onTimeRate: p.metrics.onTimeRate,
-    firstTimePassRate: p.metrics.firstTimePassRate,
     avgTime: formatDuration(p.metrics.avgCompletionMs),
   }));
 
