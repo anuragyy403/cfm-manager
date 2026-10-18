@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { removePushSubscriptionAction, savePushSubscriptionAction } from "@/server/actions/push";
 
 /**
@@ -170,35 +170,61 @@ async function currentState(): Promise<PushState> {
 export function usePush({ sync = false } = {}) {
   const [state, setState] = useState<PushState>("loading");
   const [busy, setBusy] = useState(false);
+  const shown = useRef<PushState>("loading");
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  const update = useCallback((next: PushState) => {
+    shown.current = next;
+    setState(next);
+    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
+  }, []);
+
+  /**
+   * Re-reads the browser's permission. When notifications have just been
+   * allowed (e.g. the person unblocked them in settings and came back), the
+   * device is subscribed straight away, with no reload or second tap.
+   */
+  const recheck = useCallback(
+    async ({ refreshServer = false } = {}) => {
       let next = await currentState();
-      if (sync && Notification.permission === "granted" && !readFlag(OPTED_OUT_KEY)) {
+      const allowed = supportsPush() && Notification.permission === "granted" && !readFlag(OPTED_OUT_KEY);
+      // Also re-save when they were just blocked or off: the browser may still
+      // hold an old subscription the server no longer has.
+      const justAllowed = shown.current !== "on" && shown.current !== "loading";
+      if (allowed && (next !== "on" || refreshServer || justAllowed)) {
         try {
           await subscribeDevice();
           next = "on";
         } catch (e) {
-          console.error("Could not refresh notifications", e);
+          console.error("Could not turn on notifications", e);
         }
       }
-      if (!cancelled) setState(next);
-    })().catch(() => !cancelled && setState("unsupported"));
+      update(next);
+      return next;
+    },
+    [update],
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    // The app shell also re-saves the device on load, so the server always
+    // knows who is signed in on it.
+    Promise.resolve()
+      .then(() => recheck({ refreshServer: sync }))
+      .catch(() => !cancelled && setState("unsupported"));
 
     // Keep every copy of the switch (banner, account page) in step.
-    const onChange = (e: Event) => setState((e as CustomEvent<PushState>).detail);
+    const onChange = (e: Event) => {
+      shown.current = (e as CustomEvent<PushState>).detail;
+      setState(shown.current);
+    };
     window.addEventListener(CHANGE_EVENT, onChange);
+    const stopWatching = sync ? watchPermission(() => void recheck()) : () => {};
     return () => {
       cancelled = true;
       window.removeEventListener(CHANGE_EVENT, onChange);
+      stopWatching();
     };
-  }, [sync]);
-
-  const update = useCallback((next: PushState) => {
-    setState(next);
-    window.dispatchEvent(new CustomEvent(CHANGE_EVENT, { detail: next }));
-  }, []);
+  }, [sync, recheck]);
 
   /** Must be called from a tap: browsers only show the permission prompt then. */
   const enable = useCallback(async () => {
@@ -229,5 +255,39 @@ export function usePush({ sync = false } = {}) {
     }
   }, [update]);
 
-  return { state, busy, enable, disable };
+  return { state, busy, enable, disable, recheck };
+}
+
+/**
+ * Calls `onChange` when the notification permission may have changed: the
+ * browser reports it directly where it can, and every time the person comes
+ * back to the app (e.g. from the phone's settings).
+ */
+function watchPermission(onChange: () => void) {
+  let status: PermissionStatus | null = null;
+  navigator.permissions
+    ?.query({ name: "notifications" })
+    .then((s) => {
+      status = s;
+      s.addEventListener("change", onChange);
+    })
+    .catch(() => {});
+  const onVisible = () => document.visibilityState === "visible" && onChange();
+  document.addEventListener("visibilitychange", onVisible);
+  window.addEventListener("focus", onChange);
+  return () => {
+    status?.removeEventListener("change", onChange);
+    document.removeEventListener("visibilitychange", onVisible);
+    window.removeEventListener("focus", onChange);
+  };
+}
+
+/** Which unblock instructions to show. */
+export type DeviceKind = "android-app" | "android-browser" | "iphone-app" | "iphone-browser" | "computer";
+
+export function deviceKind(): DeviceKind {
+  const installed = isInstalled();
+  if (isIOS()) return installed ? "iphone-app" : "iphone-browser";
+  if (/Android/i.test(navigator.userAgent)) return installed ? "android-app" : "android-browser";
+  return "computer";
 }

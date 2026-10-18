@@ -1,13 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Bell, BellOff, CheckCircle2, Download, Loader2, Share, SquarePlus, Smartphone } from "lucide-react";
+import { useState, useSyncExternalStore } from "react";
+import { Bell, BellOff, CheckCircle2, Download, Loader2, RefreshCw, Share, SquarePlus, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { sendTestPushAction } from "@/server/actions/push";
-import { usePush, useInstall } from "./pwa";
+import { deviceKind, type DeviceKind, usePush, useInstall } from "./pwa";
 
 /** Account settings card: install the app and turn notifications on for this device. */
 export function PhoneAppCard() {
@@ -96,15 +96,28 @@ function Step({ n }: { n: number }) {
 }
 
 function NotificationSection() {
-  const { state, busy, enable, disable } = usePush();
+  const { state, busy, enable, disable, recheck } = usePush();
   const [testing, setTesting] = useState(false);
+  const [checking, setChecking] = useState(false);
 
   async function turnOn() {
     try {
       if (await enable()) toast.success("Notifications are on for this device");
+      else if (Notification.permission === "default") {
+        toast.info("Notifications weren't allowed. Tap Turn on again and choose Allow.");
+      }
     } catch (e) {
       toast.error(e instanceof Error && e.message ? e.message : "Could not turn on notifications.");
     }
+  }
+
+  async function checkAgain() {
+    setChecking(true);
+    const next = await recheck();
+    setChecking(false);
+    if (next === "on") toast.success("Notifications are on for this device");
+    else if (next === "off") await turnOn();
+    else toast.error("Still blocked. Follow the steps above, then come back to this page.");
   }
 
   async function sendTest() {
@@ -116,7 +129,7 @@ function NotificationSection() {
   }
 
   return (
-    <section className="grid gap-2">
+    <section id="notifications" className="grid scroll-mt-24 gap-2">
       <SectionTitle>Notifications on this device</SectionTitle>
       {state === "loading" ? (
         <Loader2 className="size-4 animate-spin text-muted-foreground" />
@@ -128,13 +141,25 @@ function NotificationSection() {
           steps above, then open it from the home screen.
         </p>
       ) : state === "denied" ? (
-        <Alert>
-          <BellOff />
-          <AlertDescription>
-            Notifications are blocked for this site. Allow them in your browser or phone settings (Site settings →
-            Notifications), then reload this page.
-          </AlertDescription>
-        </Alert>
+        <div className="grid gap-3">
+          <Alert>
+            <BellOff />
+            <AlertDescription>
+              Notifications are blocked on this device. For your safety, phones don&apos;t let an app switch them
+              back on by itself. It takes a few seconds in settings:
+            </AlertDescription>
+          </Alert>
+          <UnblockSteps />
+          <p className="text-sm text-muted-foreground">
+            When you come back here, notifications switch on by themselves.
+          </p>
+          <div>
+            <Button onClick={checkAgain} disabled={checking || busy}>
+              {checking ? <Loader2 className="animate-spin" /> : <RefreshCw />}
+              I&apos;ve allowed it, check again
+            </Button>
+          </div>
+        </div>
       ) : state === "on" ? (
         <div className="flex flex-wrap items-center gap-2">
           <p className="mr-2 flex items-center gap-2 text-sm">
@@ -158,4 +183,94 @@ function NotificationSection() {
       )}
     </section>
   );
+}
+
+const noSubscribe = () => () => {};
+
+/** How to unblock notifications on this kind of device. */
+function UnblockSteps() {
+  const kind = useSyncExternalStore<DeviceKind | null>(noSubscribe, deviceKind, () => null);
+  if (!kind) return null;
+  const site = window.location.host;
+
+  if (kind === "iphone-app" || kind === "iphone-browser") {
+    return (
+      <Steps
+        steps={[
+          <>Open the iPhone <B>Settings</B> app.</>,
+          <>Tap <B>Notifications</B>, then <B>CFM Work</B>.</>,
+          <>Turn on <B>Allow Notifications</B>.</>,
+        ]}
+      />
+    );
+  }
+
+  if (kind === "computer") {
+    return (
+      <Steps
+        steps={[
+          <>Click the icon to the left of the web address (a padlock or sliders).</>,
+          <>Find <B>Notifications</B> and choose <B>Allow</B>.</>,
+          <>Come back to this tab.</>,
+        ]}
+      />
+    );
+  }
+
+  const chromeSteps = [
+    <>Open <B>Chrome</B>, tap <B>⋮</B> → <B>Settings</B> → <B>Site settings</B> → <B>Notifications</B>.</>,
+    <>Under <B>Blocked</B>, tap <B>{site}</B> and choose <B>Allow</B>.</>,
+  ];
+  const chromeTip = (
+    <p className="text-xs text-muted-foreground">
+      Still blocked? In your phone&apos;s <B>Settings</B> → <B>Apps</B> → <B>Chrome</B> → <B>Notifications</B>, make
+      sure notifications are on.
+    </p>
+  );
+
+  if (kind === "android-browser") {
+    return (
+      <div className="grid gap-3">
+        <Steps
+          steps={[
+            <>Tap the icon to the left of the web address.</>,
+            <>Tap <B>Permissions</B> (or <B>Site settings</B>) → <B>Notifications</B> → <B>Allow</B>.</>,
+          ]}
+        />
+        {chromeTip}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-3">
+      <Steps
+        steps={[
+          <>Go to your home screen and <B>press and hold</B> the CFM Work icon.</>,
+          <>Tap <B>App info</B> (the ⓘ icon).</>,
+          <>Tap <B>Notifications</B> and turn on <B>Allow notifications</B>.</>,
+        ]}
+      />
+      <p className="text-xs font-medium text-muted-foreground">No Notifications option there? Use Chrome instead:</p>
+      <Steps steps={chromeSteps} />
+      {chromeTip}
+    </div>
+  );
+}
+
+function Steps({ steps }: { steps: React.ReactNode[] }) {
+  return (
+    <ol className="grid gap-2 text-sm text-muted-foreground">
+      {steps.map((step, i) => (
+        <li key={i} className="flex items-start gap-2">
+          <Step n={i + 1} />
+          <span>{step}</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
+function B({ children }: { children: React.ReactNode }) {
+  return <span className="font-medium text-foreground">{children}</span>;
 }
