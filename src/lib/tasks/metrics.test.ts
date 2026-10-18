@@ -59,4 +59,25 @@ describe("computeMetrics", () => {
     );
     expect(m.avgCompletionMs).toBe(3 * 86_400_000);
   });
+
+  it("counts only passed work as done; handed-in work is in review, not overdue", () => {
+    const m = computeMetrics(
+      [
+        task({ status: "SUBMITTED", dueAt: day(-1), submittedAt: day(-2) }), // in review, deadline since passed
+        task({ status: "COMPLETED", dueAt: day(-3), submittedAt: day(-4), completedAt: day(-1) }), // passed late, delivered on time
+        task({ status: "COMPLETED", dueAt: day(1), submittedAt: day(-1), completedAt: day(0), timesFailed: 2 }),
+        task({ status: "IN_PROGRESS", dueAt: day(-1), timesFailed: 1 }), // sent back and now overdue
+      ],
+      now,
+    );
+    expect(m.completed).toBe(2);
+    expect(m.inReview).toBe(1);
+    expect(m.overdue).toBe(1);
+    expect(m.completed + m.inReview + m.inProgress + m.overdue + m.pending).toBe(m.total);
+    expect(m.completionRate).toBeCloseTo(2 / 4);
+    // Both were handed in by their deadlines, however long the review took.
+    expect(m.completedOnTime).toBe(2);
+    expect(m.passedFirstTime).toBe(1);
+    expect(m.firstTimePassRate).toBeCloseTo(1 / 2);
+  });
 });

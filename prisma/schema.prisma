@@ -28,6 +28,9 @@ enum Role {
 enum TaskStatus {
   PENDING
   IN_PROGRESS
+  /// Handed in by the assignee, waiting for the reviewer to pass or fail it.
+  SUBMITTED
+  /// Passed by the reviewer (or completed before reviews existed).
   COMPLETED
 }
 
@@ -48,6 +51,9 @@ enum TaskActivityType {
   ARCHIVED
   RESTORED
   SUBTASK_ADDED
+  SUBMITTED
+  PASSED
+  FAILED
 }
 
 // ─── Auth (Better Auth) ─────────────────────────────────────────────────────
@@ -215,8 +221,16 @@ model Task {
   // Lifecycle timestamps. Always set by the server, never by client input.
   assignedAt     DateTime  @default(now())
   startedAt      DateTime?
+  /// When the assignee last handed the work in; on-time is judged by this.
+  submittedAt    DateTime?
+  /// When the reviewer passed it. Only passed work counts as done.
   completedAt    DateTime?
+  /// The assignee's note on what they delivered.
   completionNote String?
+  /// The reviewer's latest feedback (required when failing).
+  reviewNote     String?
+  /// How many times the reviewer sent it back.
+  timesFailed    Int       @default(0)
   archivedAt     DateTime?
 
   createdAt DateTime @default(now())

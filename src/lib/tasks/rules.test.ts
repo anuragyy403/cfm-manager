@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   canMemberTransition,
+  changesRequested,
   completedOnTime,
   displayStatus,
   isDueSoon,
   isOverdue,
+  reviewerIsOwner,
 } from "./rules";
 
 const now = new Date("2026-10-12T12:00:00Z");
@@ -42,15 +44,50 @@ describe("completedOnTime", () => {
 });
 
 describe("member status transitions", () => {
-  it("allows only forward moves", () => {
+  it("allows only forward moves, up to handing in for review", () => {
     expect(canMemberTransition("PENDING", "IN_PROGRESS")).toBe(true);
-    expect(canMemberTransition("PENDING", "COMPLETED")).toBe(true);
-    expect(canMemberTransition("IN_PROGRESS", "COMPLETED")).toBe(true);
+    expect(canMemberTransition("PENDING", "SUBMITTED")).toBe(true);
+    expect(canMemberTransition("IN_PROGRESS", "SUBMITTED")).toBe(true);
   });
-  it("blocks moving backwards or reopening", () => {
+  it("never lets the assignee mark their own work completed", () => {
+    expect(canMemberTransition("PENDING", "COMPLETED")).toBe(false);
+    expect(canMemberTransition("IN_PROGRESS", "COMPLETED")).toBe(false);
+    expect(canMemberTransition("SUBMITTED", "COMPLETED")).toBe(false);
+  });
+  it("blocks moving backwards, out of review, or reopening", () => {
     expect(canMemberTransition("IN_PROGRESS", "PENDING")).toBe(false);
+    expect(canMemberTransition("SUBMITTED", "IN_PROGRESS")).toBe(false);
+    expect(canMemberTransition("SUBMITTED", "SUBMITTED")).toBe(false);
     expect(canMemberTransition("COMPLETED", "IN_PROGRESS")).toBe(false);
     expect(canMemberTransition("COMPLETED", "PENDING")).toBe(false);
     expect(canMemberTransition("COMPLETED", "COMPLETED")).toBe(false);
+  });
+});
+
+describe("review", () => {
+  it("work waiting for review is never overdue or due soon, even past the deadline", () => {
+    expect(isOverdue({ status: "SUBMITTED", dueAt: hours(-5) }, now)).toBe(false);
+    expect(isDueSoon({ status: "SUBMITTED", dueAt: hours(5) }, now)).toBe(false);
+    expect(displayStatus({ status: "SUBMITTED", dueAt: hours(-5) }, now)).toBe("SUBMITTED");
+  });
+
+  it("on time is judged by when the work was handed in, not when it passed", () => {
+    const task = { dueAt: hours(0), submittedAt: hours(-1), completedAt: hours(24) };
+    expect(completedOnTime(task)).toBe(true);
+    expect(completedOnTime({ ...task, submittedAt: hours(1) })).toBe(false);
+    // Completed before reviews existed: the completion time counts.
+    expect(completedOnTime({ dueAt: hours(0), submittedAt: null, completedAt: hours(-1) })).toBe(true);
+  });
+
+  it("changes are requested only on open work with feedback", () => {
+    expect(changesRequested({ status: "IN_PROGRESS", reviewNote: "Fix the footer" })).toBe(true);
+    expect(changesRequested({ status: "IN_PROGRESS", reviewNote: null })).toBe(false);
+    expect(changesRequested({ status: "COMPLETED", reviewNote: "Great work" })).toBe(false);
+    expect(changesRequested({ status: "SUBMITTED", reviewNote: "old" })).toBe(false);
+  });
+
+  it("the owner reviews a manager's own work; the manager reviews everyone else's", () => {
+    expect(reviewerIsOwner({ assigneeId: "mia", team: { managerId: "mia" } })).toBe(true);
+    expect(reviewerIsOwner({ assigneeId: "alice", team: { managerId: "mia" } })).toBe(false);
   });
 });

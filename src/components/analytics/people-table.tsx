@@ -18,18 +18,22 @@ export type PersonRow = {
   href?: string;
   total: number;
   completed: number;
+  inReview: number;
   inProgress: number;
   pending: number;
   overdue: number;
   completionRate: number | null;
   onTimeRate: number | null;
+  /** Passed without being sent back, of everything passed. */
+  firstTimePassRate: number | null;
   avgTime: string;
 };
 
 const pct = (v: number | null) => (v === null ? "—" : `${Math.round(v * 100)}%`);
 
 const SEGMENTS = [
-  { key: "completed", label: "Completed", color: "var(--sun-yellow)" },
+  { key: "completed", label: "Passed", color: "var(--sun-yellow)" },
+  { key: "inReview", label: "In review", color: "#8b5cf6" },
   { key: "inProgress", label: "In progress", color: "var(--sun-charcoal)" },
   { key: "pending", label: "Not started", color: "var(--sun-gray)" },
   { key: "overdue", label: "Overdue", color: "var(--sun-red)" },
@@ -83,17 +87,18 @@ export function PeopleTable({ rows, showTeam }: { rows: PersonRow[]; showTeam: b
       </div>
 
       <div className="overflow-x-auto px-3 pb-3">
-        <table className="w-full min-w-[860px] border-separate border-spacing-0 text-sm">
+        <table className="w-full min-w-[940px] border-separate border-spacing-0 text-sm">
           <thead>
             <tr className="text-left text-[11px] font-medium tracking-wide text-muted-foreground uppercase">
               <Th className="rounded-l-xl pl-4">Name</Th>
               {showTeam && <Th>Team</Th>}
               <Th>Role</Th>
               <Th className="w-[26%]">Workload</Th>
-              <Th className="text-right">Completed</Th>
+              <Th className="text-right">Passed</Th>
               <Th className="text-right">Overdue</Th>
               <Th className="text-right">Completion</Th>
               <Th className="text-right">On time</Th>
+              <Th className="text-right">First time</Th>
               <Th className="text-right">Avg. time</Th>
               <Th>Status</Th>
               <Th className="rounded-r-xl pr-4 text-right">
@@ -147,6 +152,7 @@ export function PeopleTable({ rows, showTeam }: { rows: PersonRow[]; showTeam: b
                   </Td>
                   <Td className="text-right tabular-nums">{pct(r.completionRate)}</Td>
                   <Td className="text-right tabular-nums">{pct(r.onTimeRate)}</Td>
+                  <Td className="text-right tabular-nums">{pct(r.firstTimePassRate)}</Td>
                   <Td className="text-right whitespace-nowrap tabular-nums text-muted-foreground">{r.avgTime}</Td>
                   <Td>
                     <span className="inline-flex items-center gap-1.5 whitespace-nowrap text-xs">

@@ -1,6 +1,6 @@
-import { AlarmClock, CalendarDays, CheckCircle2, Clock, TriangleAlert } from "lucide-react";
+import { AlarmClock, CalendarDays, CheckCircle2, Clock, Hourglass, TriangleAlert } from "lucide-react";
 import { formatDate, formatDateTime } from "@/lib/format";
-import { completedOnTime, type TaskStatus } from "@/lib/tasks/rules";
+import { completedOnTime, submittedOnTime, type TaskStatus } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
 
 const HOUR = 3_600_000;
@@ -13,7 +13,7 @@ function span(ms: number) {
   return `${d} day${d === 1 ? "" : "s"}`;
 }
 
-type ChipTask = { status: TaskStatus; dueAt: Date; completedAt: Date | null };
+type ChipTask = { status: TaskStatus; dueAt: Date; completedAt: Date | null; submittedAt?: Date | null };
 
 /** Countdown chip: "Due in 5 h", "2 days late", "Done on time"… coloured by urgency. */
 export function DueChip({ task, className }: { task: ChipTask; className?: string }) {
@@ -48,6 +48,13 @@ function chipFor(task: ChipTask) {
       ? "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:ring-emerald-900"
       : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-900";
     Icon = CheckCircle2;
+  } else if (task.status === "SUBMITTED") {
+    const onTime = submittedOnTime({ submittedAt: task.submittedAt ?? null, dueAt: task.dueAt });
+    label = onTime ? "Submitted on time" : "Submitted late";
+    tone = onTime
+      ? "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-900"
+      : "bg-rose-50 text-rose-700 ring-rose-200 dark:bg-rose-950 dark:text-rose-300 dark:ring-rose-900";
+    Icon = Hourglass;
   } else if (diff < 0) {
     label = `${span(-diff)} late`;
     tone = "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950 dark:text-red-300 dark:ring-red-900";

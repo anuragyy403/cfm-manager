@@ -30,7 +30,7 @@ export async function listTeamsWithMetrics(viewer: CurrentUser) {
     listTeams(viewer),
     prisma.task.findMany({
       where: { team: teamScope(viewer), archivedAt: null },
-      select: { teamId: true, status: true, dueAt: true, assignedAt: true, startedAt: true, completedAt: true },
+      select: { teamId: true, status: true, dueAt: true, assignedAt: true, startedAt: true, submittedAt: true, completedAt: true, timesFailed: true },
     }),
   ]);
   const now = new Date();

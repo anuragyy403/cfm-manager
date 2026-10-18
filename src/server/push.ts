@@ -4,7 +4,7 @@ import { z } from "zod";
 import { formatDateTime } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import { HOME_PATHS } from "@/lib/roles";
-import { completedOnTime } from "@/lib/tasks/rules";
+import { reviewerIsOwner, submittedOnTime } from "@/lib/tasks/rules";
 import type { CurrentUser } from "@/server/session";
 
 /**
@@ -133,7 +133,8 @@ const taskForNotice = {
   id: true,
   title: true,
   dueAt: true,
-  completedAt: true,
+  submittedAt: true,
+  reviewNote: true,
   createdById: true,
   assignee: { select: { id: true, name: true, role: true } },
   team: { select: { managerId: true, manager: { select: { role: true } } } },
@@ -160,38 +161,86 @@ export function notifyTaskAssigned(taskId: string, actor: CurrentUser, reassigne
 
 type Role = keyof typeof HOME_PATHS;
 
-/** Whoever assigned the task plus the team's manager, never the person who completed it. */
-export function completionRecipients(
-  task: { createdById: string; createdBy: { role: Role }; team: { managerId: string; manager: { role: Role } } },
-  completedById: string,
-): [string, Role][] {
-  const recipients = new Map<string, Role>([
-    [task.createdById, task.createdBy.role],
-    [task.team.managerId, task.team.manager.role],
-  ]);
-  recipients.delete(completedById);
-  return [...recipients];
+/** Shortens feedback so it fits in a notification. */
+function excerpt(text: string, max = 120) {
+  const oneLine = text.replace(/\s+/g, " ").trim();
+  return oneLine.length > max ? `${oneLine.slice(0, max - 1)}…` : oneLine;
 }
 
 /**
- * Tells the person who assigned the task, and the team's manager if that is
- * someone else, that it has been completed.
+ * Who hears about handed-in work: the reviewer (the team's manager, or the
+ * owner for a manager's own work) and whoever assigned it. Never the person
+ * who handed it in.
  */
-export function notifyTaskCompleted(taskId: string, actor: CurrentUser) {
-  return safely("completed notice", async () => {
-    const task = await prisma.task.findUnique({ where: { id: taskId }, select: taskForNotice });
-    if (!task?.completedAt) return;
+export function submissionRecipients(
+  task: {
+    assigneeId: string;
+    createdById: string;
+    createdBy: { role: Role };
+    team: { managerId: string; manager: { role: Role } };
+  },
+  owner: { id: string } | null,
+): [string, Role][] {
+  const recipients = new Map<string, Role>();
+  if (reviewerIsOwner(task)) {
+    if (owner) recipients.set(owner.id, "ADMIN");
+  } else {
+    recipients.set(task.team.managerId, task.team.manager.role);
+  }
+  recipients.set(task.createdById, task.createdBy.role);
+  recipients.delete(task.assigneeId);
+  return [...recipients];
+}
 
-    const onTime = completedOnTime({ completedAt: task.completedAt, dueAt: task.dueAt });
+/** Tells the reviewer (and whoever assigned it) that work is waiting for review. */
+export function notifyTaskSubmitted(taskId: string, actor: CurrentUser) {
+  return safely("submitted notice", async () => {
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: taskForNotice });
+    if (!task?.submittedAt) return;
+    const owner = await prisma.user.findFirst({ where: { role: "ADMIN" }, select: { id: true } });
+    const late = !submittedOnTime({ submittedAt: task.submittedAt, dueAt: task.dueAt });
+
     await Promise.all(
-      completionRecipients(task, actor.id).map(([userId, role]) =>
+      submissionRecipients({ ...task, assigneeId: task.assignee.id }, owner).map(([userId, role]) =>
         sendPushToUser(userId, {
-          title: `${actor.name} completed a task`,
-          body: `${task.title} · ${onTime ? "on time" : "after the deadline"}`,
+          title: `${actor.name} submitted a task for review`,
+          body: `${task.title}${late ? " · after the deadline" : ""} · please check it and pass or fail it`,
           url: taskUrl(role, task.id),
           tag: `task-${task.id}`,
         }),
       ),
     );
+  });
+}
+
+/** Tells the assignee their work passed, or what to change. */
+export function notifyTaskReviewed(taskId: string, actor: CurrentUser, decision: "PASS" | "FAIL") {
+  return safely("review notice", async () => {
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: taskForNotice });
+    if (!task) return;
+    const feedback = task.reviewNote ? excerpt(task.reviewNote) : null;
+    await sendPushToUser(task.assignee.id, {
+      title: decision === "PASS" ? `✅ ${actor.name} passed your task` : "Changes needed on your task",
+      body:
+        decision === "PASS"
+          ? `${task.title}${feedback ? ` · “${feedback}”` : " · it now counts as done"}`
+          : `${task.title} · ${actor.name}: “${feedback ?? "see the task for details"}”`,
+      url: taskUrl(task.assignee.role, task.id),
+      tag: `task-${task.id}`,
+    });
+  });
+}
+
+/** Tells the assignee a completed task was reopened, with the reason. */
+export function notifyTaskReopened(taskId: string, actor: CurrentUser) {
+  return safely("reopened notice", async () => {
+    const task = await prisma.task.findUnique({ where: { id: taskId }, select: taskForNotice });
+    if (!task || task.assignee.id === actor.id) return;
+    await sendPushToUser(task.assignee.id, {
+      title: `${actor.name} reopened a task`,
+      body: `${task.title}${task.reviewNote ? ` · “${excerpt(task.reviewNote)}”` : ""}`,
+      url: taskUrl(task.assignee.role, task.id),
+      tag: `task-${task.id}`,
+    });
   });
 }

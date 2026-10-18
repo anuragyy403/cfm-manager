@@ -16,15 +16,17 @@ import { getTeamAnalytics } from "@/server/analytics";
 import { setRole } from "@/server/people";
 import type { CurrentUser } from "@/server/session";
 import {
-  completeMyTask,
   createTask,
   getMyTask,
   getTask,
   listMyTasks,
+  listReviewQueue,
   listTasks,
   reopenTask,
+  reviewTask,
   setTaskArchived,
   startMyTask,
+  submitMyTask,
   updateTask,
 } from "@/server/tasks";
 import { addMember, createTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
@@ -223,11 +225,12 @@ describe("delegation with subtasks", () => {
 });
 
 describe("working on your own tasks", () => {
-  it("a manager can start and complete work the owner gave them", async () => {
+  it("a manager can start and hand in work the owner gave them, and the owner passes it", async () => {
     const task = await createTask(owner, newTask(mia.id, tech));
     expect((await listMyTasks(mia)).map((t) => t.id)).toEqual([task.id]);
     await startMyTask(mia, task.id);
-    await completeMyTask(mia, task.id, "Delivered to the owner.");
+    await submitMyTask(mia, task.id, "Delivered to the owner.");
+    await reviewTask(owner, task.id, "PASS", null);
     const done = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(done.status).toBe("COMPLETED");
   });
@@ -244,7 +247,7 @@ describe("working on your own tasks", () => {
     const bobsTask = await createTask(mia, newTask(bob.id, tech));
     await expect(getMyTask(alice, bobsTask.id)).rejects.toThrow();
     await expect(startMyTask(alice, bobsTask.id)).rejects.toThrow(DomainError);
-    await expect(completeMyTask(alice, bobsTask.id, "done it")).rejects.toThrow(DomainError);
+    await expect(submitMyTask(alice, bobsTask.id, "done it")).rejects.toThrow(DomainError);
     const unchanged = await prisma.task.findUniqueOrThrow({ where: { id: bobsTask.id } });
     expect(unchanged.status).toBe("PENDING");
   });
@@ -266,26 +269,31 @@ describe("working on your own tasks", () => {
 });
 
 describe("status workflow", () => {
-  it("records server-side timestamps and activity for start and completion", async () => {
+  it("records server-side timestamps and activity for start, hand-in and pass", async () => {
     const task = await createTask(mia, newTask(alice.id, tech));
     const before = Date.now();
     await startMyTask(alice, task.id);
-    await completeMyTask(alice, task.id, "Report sent to the client.");
+    await submitMyTask(alice, task.id, "Report sent to the client.");
+    await reviewTask(mia, task.id, "PASS", null);
     const done = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
 
     expect(done.status).toBe("COMPLETED");
     expect(done.startedAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
-    expect(done.completedAt!.getTime()).toBeGreaterThanOrEqual(done.startedAt!.getTime());
+    expect(done.submittedAt!.getTime()).toBeGreaterThanOrEqual(done.startedAt!.getTime());
+    expect(done.completedAt!.getTime()).toBeGreaterThanOrEqual(done.submittedAt!.getTime());
     expect(done.completionNote).toBe("Report sent to the client.");
 
     const activity = await prisma.taskActivity.findMany({ where: { taskId: task.id }, orderBy: { createdAt: "asc" } });
-    expect(activity.map((a) => a.type)).toEqual(["CREATED", "STARTED", "COMPLETED"]);
+    expect(activity.map((a) => a.type)).toEqual(["CREATED", "STARTED", "SUBMITTED", "PASSED"]);
   });
 
-  it("an assignee cannot complete twice or move a completed task back", async () => {
+  it("an assignee cannot hand in twice or move handed-in or passed work back", async () => {
     const task = await createTask(mia, newTask(alice.id, tech));
-    await completeMyTask(alice, task.id, "All done here.");
-    await expect(completeMyTask(alice, task.id, "Again")).rejects.toThrow(DomainError);
+    await submitMyTask(alice, task.id, "All done here.");
+    await expect(submitMyTask(alice, task.id, "Again")).rejects.toThrow(DomainError);
+    await expect(startMyTask(alice, task.id)).rejects.toThrow(DomainError);
+    await reviewTask(mia, task.id, "PASS", null);
+    await expect(submitMyTask(alice, task.id, "Again")).rejects.toThrow(DomainError);
     await expect(startMyTask(alice, task.id)).rejects.toThrow(DomainError);
   });
 
@@ -306,15 +314,120 @@ describe("status workflow", () => {
     const task = await createTask(mia, newTask(alice.id, tech));
     await expect(reopenTask(mia, task.id, "Not finished yet")).rejects.toThrow(DomainError);
     await startMyTask(alice, task.id);
-    await completeMyTask(alice, task.id, "Finished the work.");
+    await submitMyTask(alice, task.id, "Finished the work.");
+    await expect(reopenTask(mia, task.id, "Still in review")).rejects.toThrow(DomainError);
+    await reviewTask(mia, task.id, "PASS", null);
     await expect(reopenTask(noah, task.id, "Not my team")).rejects.toThrow(DomainError);
 
     await reopenTask(mia, task.id, "Missing the appendix");
     const reopened = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
     expect(reopened.status).toBe("IN_PROGRESS");
     expect(reopened.completedAt).toBeNull();
+    // The reason is what the assignee sees as the change to make.
+    expect(reopened.reviewNote).toBe("Missing the appendix");
     const log = await prisma.taskActivity.findFirstOrThrow({ where: { taskId: task.id, type: "REOPENED" } });
     expect(log.details).toMatchObject({ reason: "Missing the appendix", previousCompletionNote: "Finished the work." });
+  });
+});
+
+describe("manager review", () => {
+  it("handed-in work is in review, not done, until the manager passes it", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, task.id, "Landing page is live on staging.");
+
+    const inReview = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(inReview.status).toBe("SUBMITTED");
+    expect(inReview.submittedAt).not.toBeNull();
+    expect(inReview.completedAt).toBeNull();
+    expect((await getTeamAnalytics(mia))!.team).toMatchObject({ completed: 0, inReview: 1 });
+    expect((await listReviewQueue(mia)).map((t) => t.id)).toEqual([task.id]);
+
+    await reviewTask(mia, task.id, "PASS", "Exactly what we needed.");
+    const passed = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(passed.status).toBe("COMPLETED");
+    expect(passed.completedAt).not.toBeNull();
+    expect(passed.reviewNote).toBe("Exactly what we needed.");
+    expect((await getTeamAnalytics(mia))!.team).toMatchObject({ completed: 1, inReview: 0, passedFirstTime: 1 });
+    expect(await listReviewQueue(mia)).toHaveLength(0);
+  });
+
+  it("failing needs feedback, sends it back, and the assignee resubmits until it passes", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, task.id, "First try at the report.");
+    await expect(reviewTask(mia, task.id, "FAIL", null)).rejects.toThrow(DomainError);
+
+    await reviewTask(mia, task.id, "FAIL", "The Q3 numbers are missing.");
+    const sentBack = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(sentBack.status).toBe("IN_PROGRESS");
+    expect(sentBack.reviewNote).toBe("The Q3 numbers are missing.");
+    expect(sentBack.timesFailed).toBe(1);
+    expect(sentBack.startedAt).not.toBeNull();
+    expect((await listMyTasks(alice)).map((t) => t.status)).toEqual(["IN_PROGRESS"]);
+
+    await submitMyTask(alice, task.id, "Added the Q3 numbers.");
+    const resubmitted = await prisma.task.findUniqueOrThrow({ where: { id: task.id } });
+    expect(resubmitted.status).toBe("SUBMITTED");
+    expect(resubmitted.reviewNote).toBeNull();
+
+    await reviewTask(mia, task.id, "PASS", null);
+    const activity = await prisma.taskActivity.findMany({ where: { taskId: task.id }, orderBy: { createdAt: "asc" } });
+    expect(activity.map((a) => a.type)).toEqual(["CREATED", "SUBMITTED", "FAILED", "SUBMITTED", "PASSED"]);
+    expect(activity[2]!.details).toMatchObject({ note: "The Q3 numbers are missing." });
+    expect((await getTeamAnalytics(mia))!.team).toMatchObject({ completed: 1, passedFirstTime: 0 });
+  });
+
+  it("only the team's manager or the owner can review, and nobody reviews their own work", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, task.id, "Done, please check.");
+    await expect(reviewTask(noah, task.id, "PASS", null)).rejects.toThrow(DomainError); // other team's manager
+    await expect(reviewTask(bob, task.id, "PASS", null)).rejects.toThrow(DomainError); // a teammate
+    await expect(reviewTask(alice, task.id, "PASS", null)).rejects.toThrow(DomainError); // herself
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).status).toBe("SUBMITTED");
+
+    await reviewTask(owner, task.id, "PASS", null); // the owner may review anything
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).status).toBe("COMPLETED");
+  });
+
+  it("a manager's own work goes to the owner for review", async () => {
+    const fromOwner = await createTask(owner, newTask(mia.id, tech));
+    const fromHerself = await createTask(mia, newTask(mia.id, tech));
+    await submitMyTask(mia, fromOwner.id, "Portal is ready.");
+    await submitMyTask(mia, fromHerself.id, "Wrote the docs.");
+
+    await expect(reviewTask(mia, fromOwner.id, "PASS", null)).rejects.toThrow(DomainError);
+    await expect(reviewTask(mia, fromHerself.id, "PASS", null)).rejects.toThrow(DomainError);
+    expect(await listReviewQueue(mia)).toHaveLength(0);
+    expect((await listReviewQueue(owner)).map((t) => t.id).sort()).toEqual([fromOwner.id, fromHerself.id].sort());
+
+    await reviewTask(owner, fromOwner.id, "FAIL", "Login doesn't work on mobile.");
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: fromOwner.id } })).status).toBe("IN_PROGRESS");
+  });
+
+  it("an employee's work goes to their manager, even when the owner assigned it", async () => {
+    const task = await createTask(owner, newTask(alice.id, tech));
+    await submitMyTask(alice, task.id, "Lease papers signed.");
+    expect((await listReviewQueue(mia)).map((t) => t.id)).toEqual([task.id]);
+    expect(await listReviewQueue(owner)).toHaveLength(0);
+    await reviewTask(mia, task.id, "PASS", null);
+  });
+
+  it("only work waiting for review can be reviewed", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await expect(reviewTask(mia, task.id, "PASS", null)).rejects.toThrow(DomainError);
+    await submitMyTask(alice, task.id, "Ready.");
+    await reviewTask(mia, task.id, "PASS", null);
+    await expect(reviewTask(mia, task.id, "FAIL", "Changed my mind")).rejects.toThrow(DomainError);
+  });
+
+  it("work handed in by the deadline is on time and never overdue, however long the review takes", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, task.id, "Delivered.");
+    // The deadline passes while it waits for review.
+    await prisma.task.update({ where: { id: task.id }, data: { dueAt: new Date(Date.now() - 60_000), submittedAt: new Date(Date.now() - 120_000) } });
+    expect(await listTasks(mia, { view: "OVERDUE" })).toHaveLength(0);
+
+    await reviewTask(mia, task.id, "PASS", null);
+    expect((await getTeamAnalytics(mia))!.team).toMatchObject({ completed: 1, completedOnTime: 1, overdue: 0 });
   });
 });
 

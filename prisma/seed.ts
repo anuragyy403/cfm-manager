@@ -6,9 +6,10 @@
  *   - 2 managers: rahul@cfm.test runs "Tech team", divya@cfm.test runs "Business team"
  *   - 8 employees split across the two teams
  *   - 2 registered employees who are NOT on a team yet (to test search)
- *   - a spread of tasks in every state (pending, in progress, completed on
- *     time, completed late, overdue), plus work the owner gave each manager
- *     that the manager split into subtasks, so every dashboard has data.
+ *   - a spread of tasks in every state (pending, in progress, waiting for
+ *     review, sent back with feedback, passed on time, passed late, overdue),
+ *     plus work the owner gave each manager that the manager split into
+ *     subtasks, so every dashboard has data.
  *
  * Every seeded account uses the password in SEED_PASSWORD below.
  * Sign in as admin@cfm.test (owner), rahul@cfm.test (manager) or
@@ -120,8 +121,15 @@ type SeedTask = {
   assignedDaysAgo: number;
   dueInDays: number;
   startedDaysAgo?: number;
+  /** When it was handed in for review (SUBMITTED tasks; passed ones default to 4 h before passing). */
+  submittedDaysAgo?: number;
+  /** When the reviewer passed it. */
   completedDaysAgo?: number;
   completionNote?: string;
+  /** Times the reviewer sent it back before the current state. */
+  timesFailed?: number;
+  /** The reviewer's latest feedback (on a task sent back: what to change). */
+  reviewNote?: string;
 };
 
 const tasks: SeedTask[] = [
@@ -130,11 +138,11 @@ const tasks: SeedTask[] = [
   { title: "Set up analytics tracking", description: "Add page-view and conversion tracking to the website.", assignee: "aarav", priority: "MEDIUM", status: "COMPLETED", assignedDaysAgo: 14, dueInDays: -3, startedDaysAgo: 12, completedDaysAgo: 5, completionNote: "Tracking live; dashboard shared with marketing." },
   { title: "Prepare Q3 client report", description: "Summarise Q3 deliverables and metrics for the client review.", assignee: "priya", priority: "HIGH", status: "COMPLETED", assignedDaysAgo: 18, dueInDays: -10, startedDaysAgo: 17, completedDaysAgo: 11, completionNote: "Report sent to client and filed in the shared drive." },
   { title: "Update employee handbook", description: "Reflect the new leave policy and remote-work guidelines.", assignee: "ananya", priority: "LOW", status: "COMPLETED", assignedDaysAgo: 25, dueInDays: -12, startedDaysAgo: 22, completedDaysAgo: 13, completionNote: "Handbook v4 published." },
-  { title: "Fix checkout payment bug", description: "Customers report a failure when applying discount codes at checkout.", assignee: "rohan", priority: "URGENT", status: "COMPLETED", assignedDaysAgo: 9, dueInDays: -7, startedDaysAgo: 9, completedDaysAgo: 8, completionNote: "Root cause was rounding; patched and verified." },
+  { title: "Fix checkout payment bug", description: "Customers report a failure when applying discount codes at checkout.", assignee: "rohan", priority: "URGENT", status: "COMPLETED", assignedDaysAgo: 9, dueInDays: -7, startedDaysAgo: 9, completedDaysAgo: 8, completionNote: "Root cause was rounding; patched and verified.", reviewNote: "Quick and thorough, thank you." },
   { title: "Vendor contract renewal", description: "Review and renew the hosting vendor contract.", assignee: "sneha", priority: "MEDIUM", status: "COMPLETED", assignedDaysAgo: 16, dueInDays: -4, startedDaysAgo: 10, completedDaysAgo: 6, completionNote: "Renewed for 12 months at 8% lower cost." },
 
   // Completed late
-  { title: "Migrate blog to new CMS", description: "Move all existing blog posts and images into the new CMS.", assignee: "vikram", priority: "MEDIUM", status: "COMPLETED", assignedDaysAgo: 21, dueInDays: -9, startedDaysAgo: 18, completedDaysAgo: 4, completionNote: "All 132 posts migrated. Took longer due to broken image links." },
+  { title: "Migrate blog to new CMS", description: "Move all existing blog posts and images into the new CMS.", assignee: "vikram", priority: "MEDIUM", status: "COMPLETED", assignedDaysAgo: 21, dueInDays: -9, startedDaysAgo: 18, completedDaysAgo: 4, completionNote: "All 132 posts migrated. Took longer due to broken image links.", timesFailed: 1 },
   { title: "Design onboarding email series", description: "Write and design a 4-email onboarding sequence.", assignee: "karan", priority: "LOW", status: "COMPLETED", assignedDaysAgo: 15, dueInDays: -8, startedDaysAgo: 10, completedDaysAgo: 3, completionNote: "Series approved by marketing." },
 
   // In progress (on track)
@@ -142,6 +150,13 @@ const tasks: SeedTask[] = [
   { title: "Redesign pricing page", description: "New pricing tiers and comparison table.", assignee: "aarav", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 3, dueInDays: 1, startedDaysAgo: 1 },
   { title: "Automate weekly sales report", description: "Generate and email the weekly sales report automatically.", assignee: "neha", priority: "MEDIUM", status: "IN_PROGRESS", assignedDaysAgo: 6, dueInDays: 5, startedDaysAgo: 3 },
   { title: "Security audit of admin panel", description: "Review roles, permissions and session handling.", assignee: "rohan", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 5, dueInDays: 2, startedDaysAgo: 4 },
+
+  // Handed in, waiting for the manager's review
+  { title: "Homepage hero redesign", description: "New hero section with the autumn campaign visuals.", assignee: "aarav", priority: "HIGH", status: "SUBMITTED", assignedDaysAgo: 5, dueInDays: 1, startedDaysAgo: 4, submittedDaysAgo: 0.2, completionNote: "Hero is live on staging: new visuals, headline and button. Checked on iPhone and Android." },
+  { title: "Client onboarding checklist", description: "One-page checklist the account team uses for every new client.", assignee: "priya", priority: "MEDIUM", status: "SUBMITTED", assignedDaysAgo: 4, dueInDays: 2, startedDaysAgo: 3, submittedDaysAgo: 0.5, completionNote: "Checklist is in the shared drive under Onboarding: 18 steps, reviewed with Sneha." },
+
+  // Sent back by the manager, being fixed
+  { title: "Newsletter template", description: "Reusable email template in the brand colours.", assignee: "rohan", priority: "MEDIUM", status: "IN_PROGRESS", assignedDaysAgo: 6, dueInDays: 2, startedDaysAgo: 5, timesFailed: 1, reviewNote: "Looks good on desktop, but the layout breaks in Gmail on phones and the logo is blurry. Please fix both and resubmit." },
 
   // Pending (not started yet)
   { title: "Plan team offsite", description: "Shortlist venues and draft an agenda.", assignee: "ananya", priority: "LOW", status: "PENDING", assignedDaysAgo: 2, dueInDays: 14 },
@@ -157,7 +172,7 @@ const tasks: SeedTask[] = [
 
 type Activity = {
   actorId: string;
-  type: "CREATED" | "STARTED" | "COMPLETED" | "SUBTASK_ADDED";
+  type: "CREATED" | "STARTED" | "SUBMITTED" | "PASSED" | "FAILED" | "SUBTASK_ADDED";
   fromStatus?: TaskStatus;
   toStatus?: TaskStatus;
   details?: object;
@@ -166,11 +181,14 @@ type Activity = {
 
 async function createSeedTask(
   t: SeedTask,
-  ids: { teamId: string; assigneeId: string; createdById: string; parentId?: string },
+  ids: { teamId: string; assigneeId: string; createdById: string; reviewerId: string; parentId?: string },
 ) {
   const assignedAt = at(-t.assignedDaysAgo);
   const startedAt = t.startedDaysAgo !== undefined ? at(-t.startedDaysAgo) : null;
   const completedAt = t.completedDaysAgo !== undefined ? at(-t.completedDaysAgo) : null;
+  const submittedAt =
+    t.submittedDaysAgo !== undefined ? at(-t.submittedDaysAgo) : completedAt ? at(-t.completedDaysAgo!, -4) : null;
+  const timesFailed = t.timesFailed ?? 0;
 
   const activities: Activity[] = [
     { actorId: ids.createdById, type: "CREATED", toStatus: "PENDING", createdAt: assignedAt },
@@ -178,8 +196,36 @@ async function createSeedTask(
   if (startedAt) {
     activities.push({ actorId: ids.assigneeId, type: "STARTED", fromStatus: "PENDING", toStatus: "IN_PROGRESS", createdAt: startedAt });
   }
+  // Earlier tries the reviewer sent back, spread between starting and the last step.
+  const firstTry = (startedAt ?? assignedAt).getTime();
+  const lastStep = (submittedAt ?? at(0)).getTime();
+  for (let i = 0; i < timesFailed; i++) {
+    const tryAt = new Date(firstTry + ((lastStep - firstTry) * (i + 0.3)) / (timesFailed + 1));
+    const latest = i === timesFailed - 1 && t.status === "IN_PROGRESS";
+    activities.push(
+      { actorId: ids.assigneeId, type: "SUBMITTED", fromStatus: "IN_PROGRESS", toStatus: "SUBMITTED", details: { onTime: true }, createdAt: tryAt },
+      {
+        actorId: ids.reviewerId,
+        type: "FAILED",
+        fromStatus: "SUBMITTED",
+        toStatus: "IN_PROGRESS",
+        details: { note: latest && t.reviewNote ? t.reviewNote : "A few things to fix: see my comments on the draft." },
+        createdAt: new Date(tryAt.getTime() + 3 * HOUR),
+      },
+    );
+  }
+  if (submittedAt) {
+    activities.push({
+      actorId: ids.assigneeId,
+      type: "SUBMITTED",
+      fromStatus: startedAt ? "IN_PROGRESS" : "PENDING",
+      toStatus: "SUBMITTED",
+      details: { onTime: submittedAt.getTime() <= at(t.dueInDays).getTime() },
+      createdAt: submittedAt,
+    });
+  }
   if (completedAt) {
-    activities.push({ actorId: ids.assigneeId, type: "COMPLETED", fromStatus: startedAt ? "IN_PROGRESS" : "PENDING", toStatus: "COMPLETED", createdAt: completedAt });
+    activities.push({ actorId: ids.reviewerId, type: "PASSED", fromStatus: "SUBMITTED", toStatus: "COMPLETED", details: { note: t.reviewNote ?? null }, createdAt: completedAt });
   }
 
   const task = await prisma.task.create({
@@ -195,8 +241,11 @@ async function createSeedTask(
       createdById: ids.createdById,
       assignedAt,
       startedAt,
+      submittedAt,
       completedAt,
       completionNote: t.completionNote ?? null,
+      reviewNote: t.reviewNote ?? null,
+      timesFailed,
       createdAt: assignedAt,
       activities: { create: activities },
     },
@@ -282,20 +331,21 @@ async function main() {
   console.log("Creating tasks…");
   for (const t of tasks) {
     const team = teams[TEAM_OF[t.assignee]!];
-    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: team.managerId });
+    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: team.managerId, reviewerId: team.managerId });
   }
   let subtaskCount = 0;
   for (const d of delegated) {
     const team = teams[d.team];
-    const parent = await createSeedTask(d.task, { teamId: team.id, assigneeId: id(d.task.assignee), createdById: ownerUser.id });
+    // A manager's own work is reviewed by the owner.
+    const parent = await createSeedTask(d.task, { teamId: team.id, assigneeId: id(d.task.assignee), createdById: ownerUser.id, reviewerId: ownerUser.id });
     for (const sub of d.subtasks) {
-      await createSeedTask(sub, { teamId: team.id, assigneeId: id(sub.assignee), createdById: team.managerId, parentId: parent.id });
+      await createSeedTask(sub, { teamId: team.id, assigneeId: id(sub.assignee), createdById: team.managerId, reviewerId: team.managerId, parentId: parent.id });
       subtaskCount++;
     }
   }
   for (const t of ownerDirect) {
     const team = teams[TEAM_OF[t.assignee]!];
-    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: ownerUser.id });
+    await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: ownerUser.id, reviewerId: team.managerId });
   }
 
   console.log(

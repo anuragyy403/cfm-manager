@@ -72,7 +72,7 @@ export function TaskTable({
                 </TableCell>
               )}
               <TableCell>
-                <StatusBadge status={t.status} dueAt={t.dueAt} />
+                <StatusBadge status={t.status} dueAt={t.dueAt} reviewNote={t.reviewNote} />
               </TableCell>
               <TableCell>
                 <PriorityBadge priority={t.priority} />

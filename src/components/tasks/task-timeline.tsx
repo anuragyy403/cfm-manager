@@ -1,27 +1,40 @@
-import { CalendarClock, CheckCircle2, CirclePlay, Send } from "lucide-react";
-import { completedOnTime } from "@/lib/tasks/rules";
+import { CalendarClock, CheckCircle2, CirclePlay, Send, SendHorizontal } from "lucide-react";
+import { submittedOnTime } from "@/lib/tasks/rules";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
 type TimelineTask = {
   assignedAt: Date;
   startedAt: Date | null;
+  submittedAt: Date | null;
   completedAt: Date | null;
   dueAt: Date;
+  timesFailed?: number;
 };
 
-/** Assigned → started → completed, with the deadline for reference. */
+/**
+ * Assigned → started → submitted for review → passed, with the deadline for
+ * reference. On-time is judged by when the work was handed in.
+ */
 export function TaskTimeline({ task }: { task: TimelineTask }) {
-  const onTime = completedOnTime(task);
+  const onTime = submittedOnTime(task);
+  const rounds = task.timesFailed ?? 0;
   const steps = [
     { label: "Assigned", at: task.assignedAt, icon: Send },
     { label: "Started", at: task.startedAt, icon: CirclePlay },
     {
-      label: "Completed",
+      label: "Submitted for review",
+      at: task.submittedAt,
+      icon: SendHorizontal,
+      note: task.submittedAt ? (onTime ? "On time" : "Late") : undefined,
+      noteTone: onTime ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+    },
+    {
+      label: "Passed",
       at: task.completedAt,
       icon: CheckCircle2,
-      note: task.completedAt ? (onTime ? "On time" : "Late") : undefined,
-      noteTone: onTime ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400",
+      note: !task.completedAt ? undefined : rounds ? `after ${rounds} ${rounds === 1 ? "redo" : "redos"}` : "First time",
+      noteTone: rounds ? "text-amber-600 dark:text-amber-400" : "text-emerald-600 dark:text-emerald-400",
     },
   ];
 

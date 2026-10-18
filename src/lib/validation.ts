@@ -37,6 +37,18 @@ export const completionSchema = z.object({
     .max(2000),
 });
 
+/** A reviewer's verdict. Feedback is optional when passing, required when failing. */
+export const reviewSchema = z
+  .object({
+    decision: z.enum(["PASS", "FAIL"]),
+    note: z.string().trim().max(2000).optional().default(""),
+  })
+  .refine((v) => v.decision === "PASS" || v.note.length >= 5, {
+    path: ["note"],
+    message: "Tell them what needs to change (at least 5 characters).",
+  })
+  .transform((v) => ({ decision: v.decision, note: v.note || null }));
+
 export const reopenSchema = z.object({
   reason: z.string().trim().min(5, "Give a short reason (at least 5 characters).").max(1000),
 });

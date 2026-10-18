@@ -20,6 +20,7 @@ const VIEWS = [
   { value: "all", label: "All" },
   { value: "PENDING", label: "Pending" },
   { value: "IN_PROGRESS", label: "In progress" },
+  { value: "SUBMITTED", label: "In review" },
   { value: "OVERDUE", label: "Overdue" },
   { value: "COMPLETED", label: "Completed" },
   { value: "archived", label: "Archived" },

@@ -55,11 +55,22 @@ export function canManageTask(
   return user.role === "MANAGER" && task.team.managerId === user.id && task.createdBy.role !== "ADMIN";
 }
 
+/**
+ * Whether someone may pass or fail handed-in work. The team's manager reviews
+ * their team's work, except their own (the owner reviews that). The owner may
+ * review anything. Nobody reviews work assigned to themselves.
+ */
+export function canReview(user: CurrentUser, task: { assigneeId: string; team: { managerId: string } }) {
+  if (task.assigneeId === user.id) return false;
+  if (isOwner(user)) return true;
+  return user.role === "MANAGER" && task.team.managerId === user.id;
+}
+
 /** Whether a lead may split a task into subtasks (owner, or the team's manager). */
 export function canAddSubtask(
   user: CurrentUser,
   task: { parentId: string | null; archivedAt: Date | null; status: string; team: { managerId: string } },
 ) {
-  if (task.parentId || task.archivedAt || task.status === "COMPLETED") return false;
+  if (task.parentId || task.archivedAt || task.status === "COMPLETED" || task.status === "SUBMITTED") return false;
   return isOwner(user) || (user.role === "MANAGER" && task.team.managerId === user.id);
 }

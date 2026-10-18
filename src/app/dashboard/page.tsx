@@ -6,10 +6,11 @@ import {
   CalendarClock,
   CalendarDays,
   CheckCircle2,
-  CircleDot,
   ClipboardList,
   Clock,
   Flame,
+  Hourglass,
+  RotateCcw,
   Sun,
 } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -23,7 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { APP_TIMEZONE, formatPercent } from "@/lib/format";
 import { computeMetrics } from "@/lib/tasks/metrics";
-import { completedOnTime, isOverdue, PRIORITY_RANK } from "@/lib/tasks/rules";
+import { changesRequested, completedOnTime, isOpen, isOverdue, PRIORITY_RANK } from "@/lib/tasks/rules";
 import { requireEmployee } from "@/server/session";
 import { listMyTasks } from "@/server/tasks";
 
@@ -43,13 +44,19 @@ export default async function MemberDashboardPage() {
   const byUrgency = (a: (typeof tasks)[number], b: (typeof tasks)[number]) =>
     a.dueAt.getTime() - b.dueAt.getTime() || PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority];
 
-  const open = tasks.filter((t) => t.status !== "COMPLETED").sort(byUrgency);
-  const overdue = open.filter((t) => isOverdue(t, now));
-  const today = open.filter((t) => !isOverdue(t, now) && dayKey(t.dueAt) === todayKey);
-  const week = open.filter(
+  // Work still with the employee. Handed-in work waits on the reviewer instead.
+  const open = tasks.filter((t) => isOpen(t.status)).sort(byUrgency);
+  const sentBack = open.filter((t) => changesRequested(t));
+  const fresh = open.filter((t) => !changesRequested(t));
+  const overdue = fresh.filter((t) => isOverdue(t, now));
+  const today = fresh.filter((t) => !isOverdue(t, now) && dayKey(t.dueAt) === todayKey);
+  const week = fresh.filter(
     (t) => !isOverdue(t, now) && dayKey(t.dueAt) !== todayKey && t.dueAt.getTime() <= weekEnd,
   );
-  const later = open.filter((t) => t.dueAt.getTime() > weekEnd);
+  const later = fresh.filter((t) => t.dueAt.getTime() > weekEnd);
+  const inReview = tasks
+    .filter((t) => t.status === "SUBMITTED")
+    .sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime());
 
   const completed = tasks
     .filter((t) => t.status === "COMPLETED")
@@ -61,7 +68,7 @@ export default async function MemberDashboardPage() {
     streak++;
   }
 
-  const focusCount = overdue.length + today.length;
+  const focusCount = sentBack.length + overdue.length + today.length;
   const subtitle =
     tasks.length === 0
       ? "You don't have any tasks yet. When your manager assigns one, it will appear here."
@@ -100,9 +107,20 @@ export default async function MemberDashboardPage() {
       ) : (
         <>
           <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-            <StatCard label="Assigned to me" value={m.total} icon={ClipboardList} hint={`${m.pending} not started`} />
-            <StatCard label="In progress" value={m.inProgress} icon={CircleDot} tone="blue" />
-            <StatCard label="Completed" value={m.completed} icon={CheckCircle2} tone="green" />
+            <StatCard
+              label="Assigned to me"
+              value={m.total}
+              icon={ClipboardList}
+              hint={`${m.inProgress} in progress · ${m.pending} not started`}
+            />
+            <StatCard
+              label="In review"
+              value={m.inReview}
+              icon={Hourglass}
+              tone={m.inReview ? "violet" : "default"}
+              hint="Waiting for your manager"
+            />
+            <StatCard label="Passed" value={m.completed} icon={CheckCircle2} tone="green" hint="Counts as done" />
             <StatCard label="Overdue" value={m.overdue} icon={AlertTriangle} tone={m.overdue ? "red" : "default"} />
           </div>
 
@@ -127,10 +145,15 @@ export default async function MemberDashboardPage() {
                     <div className="flex flex-col items-center gap-2 py-6 text-center">
                       <EmptyIllustration kind="done" className="h-24" />
                       <p className="font-medium">All caught up!</p>
-                      <p className="text-sm text-muted-foreground">You have no open tasks. Great work.</p>
+                      <p className="text-sm text-muted-foreground">
+                        {inReview.length
+                          ? "Everything else is with your manager for review."
+                          : "You have no open tasks. Great work."}
+                      </p>
                     </div>
                   ) : (
                     <>
+                      <TaskGroup title="Sent back to you" icon={RotateCcw} tone="text-amber-600" tasks={sentBack} />
                       <TaskGroup title="Overdue" icon={AlertTriangle} tone="text-red-600" tasks={overdue} />
                       <TaskGroup title="Due today" icon={Clock} tone="text-sun-deep" tasks={today} />
                       <TaskGroup title="This week" icon={CalendarClock} tone="text-sky-600" tasks={week} />
@@ -163,23 +186,44 @@ export default async function MemberDashboardPage() {
                   <Meter
                     label="Completion rate"
                     value={m.completionRate}
-                    detail={`${m.completed} of ${m.total} tasks completed`}
+                    detail={`${m.completed} of ${m.total} tasks passed`}
                   />
                   <Meter
                     label="On-time rate"
                     value={m.onTimeRate}
                     detail={`${m.completedOnTime} on time · ${m.completedLate} late`}
                   />
+                  <Meter
+                    label="Passed first time"
+                    value={m.firstTimePassRate}
+                    detail={`${m.passedFirstTime} of ${m.completed} passed without changes`}
+                  />
                 </CardContent>
               </Card>
 
+              {inReview.length > 0 && (
+                <Card className="border-violet-200 dark:border-violet-900">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Hourglass className="size-4 text-violet-600" /> Waiting for review
+                    </CardTitle>
+                    <CardDescription>Your manager will pass these or send them back.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    {inReview.map((t) => (
+                      <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} />
+                    ))}
+                  </CardContent>
+                </Card>
+              )}
+
               <Card>
                 <CardHeader>
-                  <CardTitle>Recently completed</CardTitle>
+                  <CardTitle>Recently passed</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-2">
                   {completed.length === 0 ? (
-                    <p className="text-sm text-muted-foreground">Nothing completed yet.</p>
+                    <p className="text-sm text-muted-foreground">Nothing passed yet.</p>
                   ) : (
                     completed
                       .slice(0, 4)

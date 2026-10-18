@@ -206,11 +206,13 @@ export async function AnalyticsView({
       href: personHref(m),
       total: m.metrics.total,
       completed: m.metrics.completed,
+      inReview: m.metrics.inReview,
       inProgress: m.metrics.inProgress,
       pending: m.metrics.pending,
       overdue: m.metrics.overdue,
       completionRate: m.metrics.completionRate,
       onTimeRate: m.metrics.onTimeRate,
+      firstTimePassRate: m.metrics.firstTimePassRate,
       avgTime: formatDuration(m.metrics.avgCompletionMs),
     }));
 
@@ -315,7 +317,8 @@ export async function AnalyticsView({
           />
           <StatusColumns
             slices={[
-              { key: "done", label: "Completed", count: t.completed, color: "var(--sun-yellow)", onColor: "dark" },
+              { key: "done", label: "Passed", count: t.completed, color: "var(--sun-yellow)", onColor: "dark" },
+              { key: "review", label: "In review", count: t.inReview, color: "#8b5cf6", onColor: "light" },
               { key: "progress", label: "In progress", count: t.inProgress, color: "var(--sun-charcoal)", onColor: "invert" },
               { key: "pending", label: "Not started", count: t.pending, color: "var(--sun-gray)", onColor: "dark" },
               { key: "overdue", label: "Overdue", count: t.overdue, color: "var(--sun-red)", onColor: "light", warning: true },
@@ -324,7 +327,8 @@ export async function AnalyticsView({
         </SunCard>
 
         {/* Quick tiles */}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:col-span-2 lg:grid-cols-5 xl:col-span-8">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 md:col-span-2 lg:grid-cols-6 xl:col-span-8">
+          <Tile dot="#8b5cf6" label="In review" value={t.inReview} href={tasksHref("SUBMITTED")} />
           <Tile dot="var(--sun-charcoal)" label="In progress" value={t.inProgress} href={tasksHref("IN_PROGRESS")} />
           <Tile dot="var(--sun-gray)" label="Not started" value={t.pending} href={tasksHref("PENDING")} />
           <Tile dot="var(--sun-red)" label="Overdue" value={t.overdue} href={tasksHref("OVERDUE")} />
@@ -335,7 +339,13 @@ export async function AnalyticsView({
             hint={`${pct(t.onTimeRate)} on-time rate`}
             href={tasksHref("COMPLETED")}
           />
-          <Tile dot="var(--sun-gray)" label="Done late" value={t.completedLate} href={tasksHref("COMPLETED")} />
+          <Tile
+            dot="var(--sun-gray)"
+            label="Passed first time"
+            value={t.passedFirstTime}
+            hint={`${pct(t.firstTimePassRate)} · ${t.completedLate} done late`}
+            href={tasksHref("COMPLETED")}
+          />
         </div>
 
         {/* People */}

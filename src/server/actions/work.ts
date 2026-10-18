@@ -3,9 +3,9 @@
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import { type ActionResult, completionSchema, fieldErrorsOf, idSchema } from "@/lib/validation";
-import { notifyTaskCompleted } from "@/server/push";
+import { notifyTaskSubmitted } from "@/server/push";
 import { requireAssignee } from "@/server/session";
-import { completeMyTask, startMyTask } from "@/server/tasks";
+import { startMyTask, submitMyTask } from "@/server/tasks";
 import { run } from "./result";
 
 /**
@@ -24,7 +24,8 @@ export async function startTaskAction(taskId: unknown): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function completeTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {
+/** Hands the work in; the reviewer is notified to pass or fail it. */
+export async function submitTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {
   const user = await requireAssignee();
   const id = idSchema.safeParse(taskId);
   const parsed = completionSchema.safeParse(input);
@@ -32,9 +33,9 @@ export async function completeTaskAction(taskId: unknown, input: unknown): Promi
   if (!parsed.success) {
     return { ok: false, error: "Check the highlighted fields.", fieldErrors: fieldErrorsOf(parsed.error) };
   }
-  const res = await run(() => completeMyTask(user, id.data, parsed.data.note));
+  const res = await run(() => submitMyTask(user, id.data, parsed.data.note));
   if (!res.ok) return res;
-  after(() => notifyTaskCompleted(id.data, user));
+  after(() => notifyTaskSubmitted(id.data, user));
   refresh();
   return { ok: true };
 }

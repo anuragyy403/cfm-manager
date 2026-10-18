@@ -4,9 +4,9 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
-  CircleDot,
   ClipboardList,
   Clock,
+  Hourglass,
   KanbanSquare,
   Target,
   Users,
@@ -24,25 +24,27 @@ import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { NewTaskButton } from "@/components/workspace/new-task-button";
+import { ReviewQueueCard } from "@/components/workspace/review-queue-card";
 import { NewTeamButton } from "@/components/workspace/team-dialogs";
 import { formatPercent } from "@/lib/format";
 import { computeMetrics } from "@/lib/tasks/metrics";
 import { listPeople } from "@/server/people";
 import { requireOwner } from "@/server/session";
-import { listActivity, listAttentionTasks } from "@/server/tasks";
+import { listActivity, listAttentionTasks, listReviewQueue } from "@/server/tasks";
 import { listAssignableTeams, listManagerCandidates, listTeamsWithMetrics } from "@/server/teams";
 
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function OwnerOverviewPage() {
   const owner = await requireOwner();
-  const [teams, people, attention, activity, assignable, managerCandidates] = await Promise.all([
+  const [teams, people, attention, activity, assignable, managerCandidates, toReview] = await Promise.all([
     listTeamsWithMetrics(owner),
     listPeople(owner),
     listAttentionTasks(owner, 8),
     listActivity(owner, 12),
     listAssignableTeams(owner),
     listManagerCandidates(),
+    listReviewQueue(owner),
   ]);
 
   const managers = people.filter((p) => p.role === "MANAGER");
@@ -113,9 +115,20 @@ export default async function OwnerOverviewPage() {
       <GettingStarted steps={steps} />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-3 2xl:grid-cols-6">
-        <StatCard label="Total tasks" value={m.total} icon={ClipboardList} hint={`${m.pending} not started`} />
-        <StatCard label="In progress" value={m.inProgress} icon={CircleDot} tone="blue" />
-        <StatCard label="Completed" value={m.completed} icon={CheckCircle2} tone="green" />
+        <StatCard
+          label="Total tasks"
+          value={m.total}
+          icon={ClipboardList}
+          hint={`${m.inProgress} in progress · ${m.pending} not started`}
+        />
+        <StatCard
+          label="In review"
+          value={m.inReview}
+          icon={Hourglass}
+          tone={m.inReview ? "violet" : "default"}
+          hint={toReview.length ? `${toReview.length} waiting for you` : "Handed in, being checked"}
+        />
+        <StatCard label="Passed" value={m.completed} icon={CheckCircle2} tone="green" hint={`${formatPercent(m.firstTimePassRate)} first time`} />
         <StatCard label="Overdue" value={m.overdue} icon={AlertTriangle} tone={m.overdue ? "red" : "default"} />
         <StatCard label="Completion rate" value={formatPercent(m.completionRate)} icon={Target} tone="orange" />
         <StatCard
@@ -129,6 +142,11 @@ export default async function OwnerOverviewPage() {
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="min-w-0 space-y-6 xl:col-span-2">
+          <ReviewQueueCard
+            tasks={toReview}
+            base="/admin"
+            description="Your managers' own work. Their teams' work is reviewed by the managers."
+          />
           <Card>
             <CardHeader>
               <CardTitle>Teams at a glance</CardTitle>
@@ -299,15 +317,18 @@ function sumMetrics(list: ReturnType<typeof computeMetrics>[]) {
   for (const x of list) {
     total.total += x.total;
     total.completed += x.completed;
+    total.inReview += x.inReview;
     total.inProgress += x.inProgress;
     total.pending += x.pending;
     total.overdue += x.overdue;
     total.completedOnTime += x.completedOnTime;
     total.completedLate += x.completedLate;
+    total.passedFirstTime += x.passedFirstTime;
     completionMs += (x.avgCompletionMs ?? 0) * x.completed;
   }
   total.completionRate = total.total ? total.completed / total.total : null;
   total.onTimeRate = total.completed ? total.completedOnTime / total.completed : null;
+  total.firstTimePassRate = total.completed ? total.passedFirstTime / total.completed : null;
   total.avgCompletionMs = total.completed ? completionMs / total.completed : null;
   return total;
 }

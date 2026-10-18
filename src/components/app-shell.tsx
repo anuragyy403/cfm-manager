@@ -82,9 +82,9 @@ function quickLinks(role: AppRole) {
         { href: `${tasks}?view=COMPLETED`, label: "Completed" },
       ]
     : [
+        { href: `${tasks}?view=SUBMITTED`, label: "To review" },
         { href: `${tasks}?view=OVERDUE`, label: "Overdue tasks" },
         { href: `${tasks}?layout=board`, label: "Task board" },
-        { href: `${tasks}?view=IN_PROGRESS`, label: "In progress" },
       ];
 }
 

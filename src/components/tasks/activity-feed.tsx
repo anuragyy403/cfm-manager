@@ -2,12 +2,15 @@ import Link from "next/link";
 import {
   Archive,
   ArchiveRestore,
+  BadgeCheck,
   CheckCircle2,
   CirclePlay,
+  CircleX,
   Pencil,
   ListTree,
   PlusCircle,
   RotateCcw,
+  SendHorizontal,
   UserRoundPen,
 } from "lucide-react";
 import type { TaskActivityType } from "@/generated/prisma/client";
@@ -34,6 +37,9 @@ const icons: Record<TaskActivityType, typeof Pencil> = {
   ARCHIVED: Archive,
   RESTORED: ArchiveRestore,
   SUBTASK_ADDED: ListTree,
+  SUBMITTED: SendHorizontal,
+  PASSED: BadgeCheck,
+  FAILED: CircleX,
 };
 
 const badgeTone: Record<TaskActivityType, string> = {
@@ -46,6 +52,9 @@ const badgeTone: Record<TaskActivityType, string> = {
   ARCHIVED: "bg-slate-400 text-white",
   RESTORED: "bg-slate-500 text-white",
   SUBTASK_ADDED: "bg-sun text-[#1f1e1b]",
+  SUBMITTED: "bg-violet-500 text-white",
+  PASSED: "bg-emerald-500 text-white",
+  FAILED: "bg-red-500 text-white",
 };
 
 type Details = {
@@ -57,6 +66,7 @@ type Details = {
   title?: string;
   assigneeId?: string;
   withParent?: boolean;
+  note?: string | null;
 };
 
 function describe(a: FeedActivity, names: Record<string, string>) {
@@ -75,6 +85,12 @@ function describe(a: FeedActivity, names: Record<string, string>) {
       return "started working on it";
     case "COMPLETED":
       return d.onTime === false ? "marked it completed (late)" : "marked it completed";
+    case "SUBMITTED":
+      return d.onTime === false ? "submitted it for review (after the deadline)" : "submitted it for review";
+    case "PASSED":
+      return "passed it, so it now counts as done";
+    case "FAILED":
+      return "failed it and sent it back for changes";
     case "REOPENED":
       return "reopened the task";
     case "ARCHIVED":
@@ -108,7 +124,9 @@ export function ActivityFeed({
     <ol className="relative space-y-5 before:absolute before:top-2 before:bottom-2 before:left-4 before:w-px before:bg-border">
       {activities.map((a) => {
         const Icon = icons[a.type];
-        const reason = a.type === "REOPENED" ? (a.details as Details | null)?.reason : undefined;
+        const d = (a.details ?? {}) as Details;
+        // The reopen reason or the reviewer's feedback, quoted under the entry.
+        const reason = a.type === "REOPENED" ? d.reason : a.type === "PASSED" || a.type === "FAILED" ? d.note : undefined;
         return (
           <li key={a.id} className="relative flex gap-3">
             <div className="relative shrink-0">

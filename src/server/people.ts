@@ -25,7 +25,7 @@ export async function listPeople(owner: CurrentUser) {
     }),
     prisma.task.findMany({
       where: { archivedAt: null },
-      select: { assigneeId: true, status: true, dueAt: true, assignedAt: true, startedAt: true, completedAt: true },
+      select: { assigneeId: true, status: true, dueAt: true, assignedAt: true, startedAt: true, submittedAt: true, completedAt: true, timesFailed: true },
     }),
   ]);
   const now = new Date();

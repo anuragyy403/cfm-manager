@@ -1,14 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, CornerDownRight, MessageSquareText } from "lucide-react";
+import { ArrowLeft, CornerDownRight } from "lucide-react";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { PriorityBadge, StatusBadge } from "@/components/tasks/badges";
+import { ReviewCard } from "@/components/tasks/review-card";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatDateTime } from "@/lib/format";
+import { changesRequested } from "@/lib/tasks/rules";
 import { requireEmployee } from "@/server/session";
-import { getMyTask } from "@/server/tasks";
+import { getMyTask, reviewerLabel } from "@/server/tasks";
 import { WorkActions } from "@/components/workspace/work-actions";
 
 export const metadata: Metadata = { title: "Task" };
@@ -17,6 +19,7 @@ export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard
   const employee = await requireEmployee();
   const { id } = await params;
   const task = await getMyTask(employee, id);
+  const reviewer = reviewerLabel(task);
 
   return (
     <>
@@ -30,7 +33,7 @@ export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={task.status} dueAt={task.dueAt} />
+            <StatusBadge status={task.status} dueAt={task.dueAt} reviewNote={task.reviewNote} />
             <PriorityBadge priority={task.priority} />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{task.title}</h1>
@@ -45,7 +48,7 @@ export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <WorkActions taskId={task.id} status={task.status} />
+          <WorkActions taskId={task.id} status={task.status} reviewer={reviewer} resubmit={changesRequested(task)} />
         </div>
       </div>
 
@@ -64,19 +67,13 @@ export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard
             </CardContent>
           </Card>
 
-          {task.status === "COMPLETED" && (
-            <Card className="border-emerald-200 dark:border-emerald-900">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquareText className="size-4 text-emerald-600" />
-                  Your completion note
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">{task.completionNote}</p>
-              </CardContent>
-            </Card>
-          )}
+          <ReviewCard
+            task={task}
+            activities={task.activities}
+            viewer="assignee"
+            assigneeName={employee.name}
+            reviewer={reviewer}
+          />
 
           <Card>
             <CardHeader>

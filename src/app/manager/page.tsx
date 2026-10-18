@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, CircleDot, ClipboardList, KanbanSquare, Target } from "lucide-react";
+import { AlertTriangle, ArrowRight, Briefcase, CheckCircle2, ClipboardList, Hourglass, KanbanSquare, Target } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { GettingStarted } from "@/components/getting-started";
 import { EmptyIllustration } from "@/components/illustrations";
@@ -14,24 +14,26 @@ import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { WelcomeBanner } from "@/components/welcome-banner";
 import { NewTaskButton } from "@/components/workspace/new-task-button";
+import { ReviewQueueCard } from "@/components/workspace/review-queue-card";
 import { NewTeamButton } from "@/components/workspace/team-dialogs";
 import { formatPercent } from "@/lib/format";
 import { isOverdue, PRIORITY_RANK } from "@/lib/tasks/rules";
 import { getTeamAnalytics } from "@/server/analytics";
 import { requireManager } from "@/server/session";
-import { listActivity, listAttentionTasks, listMyTasks } from "@/server/tasks";
+import { listActivity, listAttentionTasks, listMyTasks, listReviewQueue } from "@/server/tasks";
 import { listAssignableTeams } from "@/server/teams";
 
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function ManagerOverviewPage() {
   const manager = await requireManager();
-  const [analytics, myTasks, attention, activity, assignable] = await Promise.all([
+  const [analytics, myTasks, attention, activity, assignable, toReview] = await Promise.all([
     getTeamAnalytics(manager),
     listMyTasks(manager),
     listAttentionTasks(manager, 8),
     listActivity(manager, 10),
     listAssignableTeams(manager),
+    listReviewQueue(manager),
   ]);
 
   const myOpen = myTasks
@@ -73,7 +75,7 @@ export default async function ManagerOverviewPage() {
       <AutoRefresh />
       <WelcomeBanner
         name={manager.name}
-        subtitle={`${myOpen.length ? `You have ${myOpen.length} task${myOpen.length === 1 ? "" : "s"} of your own${myOverdue ? ` (${myOverdue} overdue)` : ""}. ` : ""}${teamWord} ${
+        subtitle={`${toReview.length ? `${toReview.length} task${toReview.length === 1 ? " is" : "s are"} waiting for your review. ` : ""}${myOpen.length ? `You have ${myOpen.length} task${myOpen.length === 1 ? "" : "s"} of your own${myOverdue ? ` (${myOverdue} overdue)` : ""}. ` : ""}${teamWord} ${
           analytics.teams.length === 1 ? "has" : "have"
         } ${open} open task${open === 1 ? "" : "s"}${m.overdue ? `, ${m.overdue} overdue` : ""}.`}
         actions={
@@ -111,20 +113,36 @@ export default async function ManagerOverviewPage() {
       />
 
       <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 xl:grid-cols-4">
-        <StatCard label="Team tasks" value={m.total} icon={ClipboardList} hint={`${m.pending} not started`} />
-        <StatCard label="In progress" value={m.inProgress} icon={CircleDot} tone="blue" />
+        <StatCard
+          label="Team tasks"
+          value={m.total}
+          icon={ClipboardList}
+          hint={`${m.inProgress} in progress · ${m.pending} not started`}
+        />
+        <StatCard
+          label="To review"
+          value={toReview.length}
+          icon={Hourglass}
+          tone={toReview.length ? "violet" : "default"}
+          hint={m.inReview > toReview.length ? `${m.inReview} in review in total` : "Handed in, waiting for you"}
+        />
         <StatCard label="Overdue" value={m.overdue} icon={AlertTriangle} tone={m.overdue ? "red" : "default"} />
         <StatCard
           label="Completion rate"
           value={formatPercent(m.completionRate)}
           icon={Target}
           tone="orange"
-          hint={`${m.completed} completed`}
+          hint={`${m.completed} passed`}
         />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <div className="min-w-0 space-y-6 xl:col-span-2">
+          <ReviewQueueCard
+            tasks={toReview}
+            base="/manager"
+            description="Your team handed these in. Check each one and pass it, or fail it with feedback."
+          />
           <MyWorkCard tasks={myOpen} overdue={myOverdue} />
 
           <Card>

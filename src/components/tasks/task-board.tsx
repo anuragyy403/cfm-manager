@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AlertTriangle, CheckCircle2, Circle, CircleDot } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Circle, CircleDot, Hourglass } from "lucide-react";
 import { UserAvatar } from "@/components/user-avatar";
 import { type DisplayStatus, displayStatus, PRIORITY_RANK } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,7 @@ const COLUMNS: { status: DisplayStatus; label: string; icon: typeof Circle; acce
   { status: "PENDING", label: "Pending", icon: Circle, accent: "border-t-slate-400", dot: "text-slate-500" },
   { status: "IN_PROGRESS", label: "In progress", icon: CircleDot, accent: "border-t-sky-500", dot: "text-sky-600" },
   { status: "OVERDUE", label: "Overdue", icon: AlertTriangle, accent: "border-t-red-500", dot: "text-red-600" },
+  { status: "SUBMITTED", label: "In review", icon: Hourglass, accent: "border-t-violet-500", dot: "text-violet-600" },
   { status: "COMPLETED", label: "Completed", icon: CheckCircle2, accent: "border-t-emerald-500", dot: "text-emerald-600" },
 ];
 
@@ -26,12 +27,14 @@ export function TaskBoard({ tasks, base }: { tasks: TaskListItem[]; base: string
   // Most urgent first in open columns; most recent first for completed.
   for (const [status, list] of byStatus) {
     if (status === "COMPLETED") list.sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
+    // Waiting longest first, so nothing sits in review forgotten.
+    else if (status === "SUBMITTED") list.sort((a, b) => a.submittedAt!.getTime() - b.submittedAt!.getTime());
     else list.sort((a, b) => a.dueAt.getTime() - b.dueAt.getTime() || PRIORITY_RANK[b.priority] - PRIORITY_RANK[a.priority]);
   }
 
   return (
     <div className="-mx-4 overflow-x-auto px-4 pb-2 md:mx-0 md:px-0">
-      <div className="grid min-w-[880px] grid-cols-4 gap-4">
+      <div className="grid min-w-[1100px] grid-cols-5 gap-4">
         {COLUMNS.map((col) => {
           const list = byStatus.get(col.status)!;
           const shown = col.status === "COMPLETED" ? list.slice(0, COMPLETED_LIMIT) : list;

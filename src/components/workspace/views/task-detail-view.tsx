@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { ArrowLeft, Archive, CornerDownRight, Lock, MessageSquareText, Users } from "lucide-react";
+import { ArrowLeft, Archive, CornerDownRight, Lock, Users } from "lucide-react";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ActivityFeed } from "@/components/tasks/activity-feed";
 import { PriorityBadge, StatusBadge } from "@/components/tasks/badges";
+import { ReviewCard } from "@/components/tasks/review-card";
 import { TaskListItem } from "@/components/tasks/task-list-item";
 import { TaskTimeline } from "@/components/tasks/task-timeline";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,11 +13,13 @@ import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatDateTime } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/roles";
-import { canAddSubtask, canManageTask, isOwner } from "@/server/access";
+import { changesRequested, reviewerIsOwner } from "@/lib/tasks/rules";
+import { canAddSubtask, canManageTask, canReview, isOwner } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { getTask, namesForActivities } from "@/server/tasks";
 import { listAssignableTeams } from "@/server/teams";
 import { NewTaskButton } from "../new-task-button";
+import { ReviewActions } from "../review-actions";
 import { TaskManageActions } from "../task-manage-actions";
 import { WorkActions } from "../work-actions";
 
@@ -35,6 +38,15 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
   const manageable = canManageTask(viewer, task);
   const splittable = canAddSubtask(viewer, task);
   const mine = task.assigneeId === viewer.id;
+  const reviewable = canReview(viewer, task) && task.status === "SUBMITTED" && !task.archivedAt;
+  // The team's manager reviews; the owner reviews a manager's own work.
+  const reviewer = reviewerIsOwner(task)
+    ? isOwner(viewer)
+      ? "you"
+      : "the owner"
+    : task.team.managerId === viewer.id
+      ? "you"
+      : task.team.manager.name;
   const assigneeOnTeam =
     task.team.members.some((m) => m.userId === task.assigneeId) ||
     (task.team.managerId === task.assigneeId && task.assignee.role === "MANAGER");
@@ -58,7 +70,7 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
       <div className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <StatusBadge status={task.status} dueAt={task.dueAt} />
+            <StatusBadge status={task.status} dueAt={task.dueAt} reviewNote={task.reviewNote} />
             <PriorityBadge priority={task.priority} />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">{task.title}</h1>
@@ -74,11 +86,7 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
           {mine && !task.archivedAt && (
-            <WorkActions
-              taskId={task.id}
-              status={task.status}
-              reportsTo={task.createdBy.role === "ADMIN" ? "the owner" : task.createdBy.name}
-            />
+            <WorkActions taskId={task.id} status={task.status} reviewer="the owner" resubmit={changesRequested(task)} />
           )}
           {manageable && (
             <TaskManageActions
@@ -147,26 +155,14 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
             </CardContent>
           </Card>
 
-          {task.status === "COMPLETED" && (
-            <Card className="border-emerald-200 dark:border-emerald-900">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <MessageSquareText className="size-4 text-emerald-600" />
-                  Completion note
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {task.completionNote || <span className="text-muted-foreground">No note.</span>}
-                </p>
-                {task.completedAt && (
-                  <p className="mt-3 text-xs text-muted-foreground">
-                    Submitted by {task.assignee.name} on {formatDateTime(task.completedAt)}
-                  </p>
-                )}
-              </CardContent>
-            </Card>
-          )}
+          <ReviewCard
+            task={task}
+            activities={task.activities}
+            viewer={mine ? "assignee" : "lead"}
+            assigneeName={task.assignee.name}
+            reviewer={mine ? "the owner" : reviewer}
+            actions={reviewable ? <ReviewActions taskId={task.id} assigneeName={task.assignee.name} /> : undefined}
+          />
 
           {!task.parent && (splittable || task.subtasks.length > 0) && (
             <Card>

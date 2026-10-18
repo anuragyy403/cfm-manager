@@ -7,12 +7,13 @@ import {
   fieldErrorsOf,
   idSchema,
   reopenSchema,
+  reviewSchema,
   taskInputSchema,
   taskUpdateSchema,
   teamSchema,
 } from "@/lib/validation";
 import { sendMemberPasswordReset } from "@/server/password-reset";
-import { notifyTaskAssigned } from "@/server/push";
+import { notifyTaskAssigned, notifyTaskReopened, notifyTaskReviewed } from "@/server/push";
 import { requireLead } from "@/server/session";
 import * as tasks from "@/server/tasks";
 import * as teams from "@/server/teams";
@@ -139,6 +140,21 @@ export async function setTaskArchivedAction(taskId: unknown, archived: unknown):
   return { ok: true };
 }
 
+/** Pass or fail handed-in work. The assignee is notified either way. */
+export async function reviewTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {
+  const lead = await requireLead();
+  const id = idSchema.safeParse(taskId);
+  const parsed = reviewSchema.safeParse(input);
+  if (!id.success) return { ok: false, error: "Invalid task." };
+  if (!parsed.success) return { ok: false, error: INVALID_FIELDS, fieldErrors: fieldErrorsOf(parsed.error) };
+  const { decision, note } = parsed.data;
+  const res = await run(() => tasks.reviewTask(lead, id.data, decision, note));
+  if (!res.ok) return res;
+  after(() => notifyTaskReviewed(id.data, lead, decision));
+  refresh();
+  return { ok: true };
+}
+
 export async function reopenTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {
   const lead = await requireLead();
   const id = idSchema.safeParse(taskId);
@@ -147,6 +163,7 @@ export async function reopenTaskAction(taskId: unknown, input: unknown): Promise
   if (!parsed.success) return { ok: false, error: INVALID_FIELDS, fieldErrors: fieldErrorsOf(parsed.error) };
   const res = await run(() => tasks.reopenTask(lead, id.data, parsed.data.reason));
   if (!res.ok) return res;
+  after(() => notifyTaskReopened(id.data, lead));
   refresh();
   return { ok: true };
 }

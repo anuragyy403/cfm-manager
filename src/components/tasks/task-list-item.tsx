@@ -26,7 +26,9 @@ export function TaskListItem({
     status: TaskStatus;
     priority: TaskPriority;
     dueAt: Date;
+    submittedAt?: Date | null;
     completedAt: Date | null;
+    reviewNote?: string | null;
   };
   href: string;
   /** Shown on lead views so the owner or manager sees who owns the task. */
@@ -48,10 +50,10 @@ export function TaskListItem({
           {context && <span className="mr-1 max-w-56 truncate text-xs text-muted-foreground">{context}</span>}
           <DueChip task={task} />
           <PriorityBadge priority={task.priority} className="h-6" />
-          <StatusBadge status={task.status} dueAt={task.dueAt} className="h-6 sm:hidden" />
+          <StatusBadge status={task.status} dueAt={task.dueAt} reviewNote={task.reviewNote} className="h-6 sm:hidden" />
         </div>
       </div>
-      <StatusBadge status={task.status} dueAt={task.dueAt} className="hidden h-6 sm:inline-flex" />
+      <StatusBadge status={task.status} dueAt={task.dueAt} reviewNote={task.reviewNote} className="hidden h-6 sm:inline-flex" />
       <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" />
     </Link>
   );

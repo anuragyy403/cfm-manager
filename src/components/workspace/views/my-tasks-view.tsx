@@ -12,6 +12,7 @@ const VIEWS = [
   { value: "all", label: "All" },
   { value: "PENDING", label: "Pending" },
   { value: "IN_PROGRESS", label: "In progress" },
+  { value: "SUBMITTED", label: "In review" },
   { value: "OVERDUE", label: "Overdue" },
   { value: "COMPLETED", label: "Completed" },
 ] as const;
@@ -40,7 +41,7 @@ export async function MyTasksView({
   // One query; the tabs filter by derived status so counts stay consistent.
   const all = await listMyTasks(user);
   const now = new Date();
-  const counts: Record<View, number> = { all: all.length, PENDING: 0, IN_PROGRESS: 0, OVERDUE: 0, COMPLETED: 0 };
+  const counts: Record<View, number> = { all: all.length, PENDING: 0, IN_PROGRESS: 0, SUBMITTED: 0, OVERDUE: 0, COMPLETED: 0 };
   for (const t of all) counts[displayStatus(t, now)]++;
   const tasks = view === "all" ? all : all.filter((t) => displayStatus(t, now) === view);
   if (view === "COMPLETED") tasks.sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());

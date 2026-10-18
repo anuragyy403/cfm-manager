@@ -1,36 +1,40 @@
 /**
- * Phone notifications: who gets told about a completed task, which device
+ * Phone notifications: who gets told about handed-in work, which device
  * addresses are accepted, and that a shared device follows whoever signed in.
  */
 import { randomUUID } from "node:crypto";
 import { afterAll, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
-import { completionRecipients, pushSubscriptionSchema, savePushSubscription } from "@/server/push";
+import { pushSubscriptionSchema, savePushSubscription, submissionRecipients } from "@/server/push";
 import type { CurrentUser } from "@/server/session";
 
 const keys = { p256dh: "BNcRdreALRFXTkOOUHK1EtK2wtaz5Ry4YfYCA_0QTpQtUbVlUls0VJXg7A8u-Ts1XbjhazAkj7I99e8QcYP7DkM", auth: "tBHItJI5svbpez7KI4CCXg" };
 
-describe("completion notice recipients", () => {
-  const task = (createdById: string, createdByRole: "ADMIN" | "MANAGER", managerId: string) => ({
+describe("submitted-for-review notice recipients", () => {
+  const owner = { id: "owner" };
+  const task = (assigneeId: string, createdById: string, createdByRole: "ADMIN" | "MANAGER", managerId: string) => ({
+    assigneeId,
     createdById,
     createdBy: { role: createdByRole },
     team: { managerId, manager: { role: "MANAGER" as const } },
   });
 
-  it("tells the manager who assigned it", () => {
-    expect(completionRecipients(task("mia", "MANAGER", "mia"), "alice")).toEqual([["mia", "MANAGER"]]);
+  it("tells the manager, who reviews their team's work", () => {
+    expect(submissionRecipients(task("alice", "mia", "MANAGER", "mia"), owner)).toEqual([["mia", "MANAGER"]]);
   });
 
-  it("tells both the owner who assigned it and the team's manager", () => {
-    expect(completionRecipients(task("owner", "ADMIN", "mia"), "alice")).toEqual([
-      ["owner", "ADMIN"],
+  it("tells the team's manager (the reviewer) and the owner who assigned it", () => {
+    expect(submissionRecipients(task("alice", "owner", "ADMIN", "mia"), owner)).toEqual([
       ["mia", "MANAGER"],
+      ["owner", "ADMIN"],
     ]);
   });
 
-  it("never tells the person who completed it", () => {
-    // The owner gave Mia (the manager) a task; Mia completes it.
-    expect(completionRecipients(task("owner", "ADMIN", "mia"), "mia")).toEqual([["owner", "ADMIN"]]);
+  it("sends a manager's own work to the owner, never to the manager", () => {
+    // The owner gave Mia (the manager) a task; Mia hands it in.
+    expect(submissionRecipients(task("mia", "owner", "ADMIN", "mia"), owner)).toEqual([["owner", "ADMIN"]]);
+    // Mia gave herself a task: the owner still reviews it.
+    expect(submissionRecipients(task("mia", "mia", "MANAGER", "mia"), owner)).toEqual([["owner", "ADMIN"]]);
   });
 });
 

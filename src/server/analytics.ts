@@ -67,7 +67,9 @@ export async function getTeamAnalytics(
       dueAt: true,
       assignedAt: true,
       startedAt: true,
+      submittedAt: true,
       completedAt: true,
+      timesFailed: true,
     },
   });
 
@@ -139,7 +141,7 @@ export async function getWeeklyTrend(
       archivedAt: null,
       OR: [{ assignedAt: { gte: firstWeek } }, { completedAt: { gte: firstWeek } }],
     },
-    select: { assignedAt: true, completedAt: true, dueAt: true },
+    select: { assignedAt: true, submittedAt: true, completedAt: true, dueAt: true },
   });
 
   const points: WeeklyPoint[] = Array.from({ length: weeks }, (_, i) => ({

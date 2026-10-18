@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { CheckCircle2, CirclePlay, Loader2 } from "lucide-react";
+import { CirclePlay, Loader2, SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,48 +15,53 @@ import {
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/textarea";
 import type { TaskStatus } from "@/lib/tasks/rules";
-import { celebrate } from "@/lib/celebrate";
-import { completeTaskAction, startTaskAction } from "@/server/actions/work";
+import { startTaskAction, submitTaskAction } from "@/server/actions/work";
 
-/** Start / complete buttons for the person a task is assigned to. */
+/**
+ * Start / submit-for-review buttons for the person a task is assigned to.
+ * The work only counts as done once the reviewer passes it.
+ */
 export function WorkActions({
   taskId,
   status,
-  reportsTo = "your manager",
+  reviewer,
+  resubmit = false,
 }: {
   taskId: string;
   status: TaskStatus;
-  /** Who sees the progress, e.g. "your manager" or "the owner". */
-  reportsTo?: string;
+  /** Who reviews the work, e.g. "Rahul Khanna" or "the owner". */
+  reviewer: string;
+  /** The reviewer sent it back, so this is another try. */
+  resubmit?: boolean;
 }) {
-  const Who = reportsTo.charAt(0).toUpperCase() + reportsTo.slice(1);
   const [pending, startTransition] = useTransition();
-  const [completeOpen, setCompleteOpen] = useState(false);
+  const [submitOpen, setSubmitOpen] = useState(false);
   const [noteError, setNoteError] = useState<string>();
 
-  if (status === "COMPLETED") return null;
+  if (status === "COMPLETED" || status === "SUBMITTED") return null;
 
   function start() {
     startTransition(async () => {
       const res = await startTaskAction(taskId);
       if (!res.ok) toast.error(res.error);
-      else toast.success("Marked as in progress", { description: `${Who} can see you've started.` });
+      else toast.success("Marked as in progress", { description: `${capitalise(reviewer)} can see you've started.` });
     });
   }
 
-  function complete(e: React.FormEvent<HTMLFormElement>) {
+  function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const note = new FormData(e.currentTarget).get("note");
     startTransition(async () => {
-      const res = await completeTaskAction(taskId, { note });
+      const res = await submitTaskAction(taskId, { note });
       if (!res.ok) {
         setNoteError(res.fieldErrors?.note ?? res.error);
         return;
       }
       setNoteError(undefined);
-      setCompleteOpen(false);
-      void celebrate();
-      toast.success("Task completed. Great work! 🎉", { description: `${Who} can see it's done.` });
+      setSubmitOpen(false);
+      toast.success("Submitted for review", {
+        description: `${capitalise(reviewer)} has been notified and will pass it or send it back.`,
+      });
     });
   }
 
@@ -68,47 +73,56 @@ export function WorkActions({
           Start working
         </Button>
       )}
-      <Button variant="brand" onClick={() => setCompleteOpen(true)} disabled={pending}>
-        <CheckCircle2 />
-        Mark as completed
+      <Button variant="brand" onClick={() => setSubmitOpen(true)} disabled={pending}>
+        <SendHorizontal />
+        {resubmit ? "Resubmit for review" : "Submit for review"}
       </Button>
 
-      <Dialog open={completeOpen} onOpenChange={setCompleteOpen}>
+      <Dialog open={submitOpen} onOpenChange={setSubmitOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Complete this task</DialogTitle>
+            <DialogTitle>{resubmit ? "Resubmit for review" : "Submit for review"}</DialogTitle>
             <DialogDescription>
-              Tell {reportsTo} what was done. This can&apos;t be undone from your side.
+              {capitalise(reviewer)} will check your work and pass it or send it back with feedback. It counts as
+              done once it passes.
             </DialogDescription>
           </DialogHeader>
-          <form id="complete-form" onSubmit={complete}>
+          <form id="submit-form" onSubmit={submit}>
             <Field data-invalid={!!noteError}>
-              <FieldLabel htmlFor="note">Completion note</FieldLabel>
+              <FieldLabel htmlFor="note">What did you deliver?</FieldLabel>
               <Textarea
                 id="note"
                 name="note"
                 rows={4}
-                placeholder="What did you deliver? Add links to files or pages if relevant."
+                placeholder={
+                  resubmit
+                    ? "What did you change? Add links to files or pages if relevant."
+                    : "What did you deliver? Add links to files or pages if relevant."
+                }
                 autoFocus
               />
               {noteError ? (
                 <FieldError>{noteError}</FieldError>
               ) : (
-                <FieldDescription>Required. {Who} sees this with the completed task.</FieldDescription>
+                <FieldDescription>Required. {capitalise(reviewer)} reads this while reviewing.</FieldDescription>
               )}
             </Field>
           </form>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setCompleteOpen(false)} disabled={pending}>
+            <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button type="submit" form="complete-form" disabled={pending} variant="brand">
+            <Button type="submit" form="submit-form" disabled={pending} variant="brand">
               {pending && <Loader2 className="animate-spin" />}
-              Submit &amp; complete
+              Submit for review
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
   );
+}
+
+function capitalise(text: string) {
+  return text.charAt(0).toUpperCase() + text.slice(1);
 }

@@ -2,9 +2,9 @@ import "server-only";
 import { notFound } from "next/navigation";
 import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
-import { canMemberTransition, completedOnTime, DUE_SOON_MS } from "@/lib/tasks/rules";
+import { canMemberTransition, DUE_SOON_MS, reviewerIsOwner, submittedOnTime } from "@/lib/tasks/rules";
 import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
-import { canAddSubtask, canManageTask, DomainError, myWorkScope, taskScope, teamScope } from "@/server/access";
+import { canAddSubtask, canManageTask, canReview, DomainError, isOwner, myWorkScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { isAssignableInTeam } from "@/server/teams";
 
@@ -25,8 +25,11 @@ export const taskListSelect = {
   dueAt: true,
   assignedAt: true,
   startedAt: true,
+  submittedAt: true,
   completedAt: true,
   archivedAt: true,
+  reviewNote: true,
+  timesFailed: true,
   parentId: true,
   assignee: { select: { id: true, name: true, username: true } },
   team: { select: { id: true, name: true } },
@@ -40,11 +43,15 @@ export const TASK_VIEWS = [
   "all",
   "PENDING",
   "IN_PROGRESS",
+  "SUBMITTED",
   "OVERDUE",
   "COMPLETED",
   "archived",
 ] as const;
 export type TaskView = (typeof TASK_VIEWS)[number];
+
+/** Still with the assignee (not handed in, not passed). */
+const OPEN_STATUSES: TaskStatus[] = ["PENDING", "IN_PROGRESS"];
 
 /** Prisma filter matching a display status (overdue is derived from the deadline). */
 export function viewWhere(view: TaskView, now = new Date()): Prisma.TaskWhereInput {
@@ -52,10 +59,12 @@ export function viewWhere(view: TaskView, now = new Date()): Prisma.TaskWhereInp
     case "archived":
       return { archivedAt: { not: null } };
     case "OVERDUE":
-      return { archivedAt: null, status: { not: "COMPLETED" }, dueAt: { lt: now } };
+      return { archivedAt: null, status: { in: OPEN_STATUSES }, dueAt: { lt: now } };
     case "PENDING":
     case "IN_PROGRESS":
       return { archivedAt: null, status: view, dueAt: { gte: now } };
+    case "SUBMITTED":
+      return { archivedAt: null, status: "SUBMITTED" };
     case "COMPLETED":
       return { archivedAt: null, status: "COMPLETED" };
     default:
@@ -179,7 +188,7 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
       throw new DomainError(
         parent.parentId
           ? "A subtask can't be split further."
-          : parent.status === "COMPLETED" || parent.archivedAt
+          : parent.status === "COMPLETED" || parent.status === "SUBMITTED" || parent.archivedAt
             ? "Subtasks can only be added to open tasks."
             : "Only the owner or this team's manager can add subtasks.",
       );
@@ -260,7 +269,14 @@ export async function updateTask(viewer: CurrentUser, taskId: string, input: Tas
   // A new assignee starts fresh: the task goes back to pending.
   let statusData: Prisma.TaskUpdateInput = {};
   if (reassigned) {
-    statusData = { status: "PENDING", startedAt: null, assignedAt: new Date() };
+    statusData = {
+      status: "PENDING",
+      startedAt: null,
+      submittedAt: null,
+      completionNote: null,
+      reviewNote: null,
+      assignedAt: new Date(),
+    };
     activities.push({
       actorId: viewer.id,
       type: "REASSIGNED",
@@ -328,7 +344,8 @@ export async function reopenTask(viewer: CurrentUser, taskId: string, reason: st
   await prisma.$transaction(async (tx) => {
     const { count } = await tx.task.updateMany({
       where: { id: task.id, status: "COMPLETED" },
-      data: { status: toStatus, completedAt: null, completionNote: null },
+      // The reason shows to the assignee as the feedback to act on.
+      data: { status: toStatus, completedAt: null, submittedAt: null, completionNote: null, reviewNote: reason },
     });
     if (count === 0) {
       throw new DomainError("This task changed in the meantime. Refresh and try again.");
@@ -350,6 +367,90 @@ export async function reopenTask(viewer: CurrentUser, taskId: string, reason: st
   });
 }
 
+export type ReviewDecision = "PASS" | "FAIL";
+
+/**
+ * The reviewer's verdict on handed-in work. Pass: the task is completed and
+ * counts as done. Fail: it goes back to the assignee with the feedback.
+ */
+export async function reviewTask(viewer: CurrentUser, taskId: string, decision: ReviewDecision, note: string | null) {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, ...taskScope(viewer) },
+    select: {
+      id: true,
+      status: true,
+      archivedAt: true,
+      assigneeId: true,
+      startedAt: true,
+      submittedAt: true,
+      dueAt: true,
+      team: { select: { managerId: true } },
+    },
+  });
+  if (!task) throw new DomainError("Task not found.");
+  if (!canReview(viewer, task)) {
+    throw new DomainError(
+      task.assigneeId === viewer.id
+        ? "You can't review your own work. The owner reviews it."
+        : "Only this team's manager or the owner can review this task.",
+    );
+  }
+  if (task.archivedAt) throw new DomainError("Restore this task before reviewing it.");
+  if (task.status !== "SUBMITTED") throw new DomainError("This task isn't waiting for review.");
+  if (decision === "FAIL" && !note) throw new DomainError("Tell them what needs to change.");
+
+  const now = new Date();
+  const data: Prisma.TaskUpdateManyMutationInput =
+    decision === "PASS"
+      ? { status: "COMPLETED", completedAt: now, reviewNote: note }
+      : {
+          status: "IN_PROGRESS",
+          // Handed in straight from pending: it's being worked on again now.
+          startedAt: task.startedAt ?? task.submittedAt ?? now,
+          reviewNote: note,
+          timesFailed: { increment: 1 },
+        };
+
+  await prisma.$transaction(async (tx) => {
+    const { count } = await tx.task.updateMany({ where: { id: task.id, status: "SUBMITTED" }, data });
+    if (count === 0) throw new DomainError("This task changed in the meantime. Refresh and try again.");
+    await tx.taskActivity.create({
+      data: {
+        taskId: task.id,
+        actorId: viewer.id,
+        type: decision === "PASS" ? "PASSED" : "FAILED",
+        fromStatus: "SUBMITTED",
+        toStatus: decision === "PASS" ? "COMPLETED" : "IN_PROGRESS",
+        details: {
+          note,
+          ...(decision === "PASS"
+            ? { onTime: submittedOnTime({ submittedAt: task.submittedAt, dueAt: task.dueAt }) }
+            : {}),
+        },
+      },
+    });
+  });
+}
+
+/**
+ * Handed-in work this lead should review, oldest first. A manager reviews
+ * their teams' work except their own; the owner reviews the managers' own
+ * work (everything else the owner can still find under "In review").
+ */
+export async function listReviewQueue(viewer: CurrentUser, take = 20) {
+  const tasks = await prisma.task.findMany({
+    where: {
+      ...taskScope(viewer),
+      archivedAt: null,
+      status: "SUBMITTED",
+      ...(isOwner(viewer) ? {} : { assigneeId: { not: viewer.id } }),
+    },
+    select: { ...taskListSelect, team: { select: { id: true, name: true, managerId: true } } },
+    orderBy: { submittedAt: "asc" },
+  });
+  return (isOwner(viewer) ? tasks.filter((t) => reviewerIsOwner({ assigneeId: t.assignee.id, team: t.team })) : tasks).slice(0, take);
+}
+
 /** Open tasks that are overdue or due within 48 hours, most urgent first. */
 export async function listAttentionTasks(viewer: CurrentUser, take = 8, teamId?: string) {
   return prisma.task.findMany({
@@ -357,7 +458,7 @@ export async function listAttentionTasks(viewer: CurrentUser, take = 8, teamId?:
       ...taskScope(viewer),
       ...(teamId ? { teamId } : {}),
       archivedAt: null,
-      status: { not: "COMPLETED" },
+      status: { in: OPEN_STATUSES },
       dueAt: { lte: new Date(Date.now() + DUE_SOON_MS) },
     },
     select: taskListSelect,
@@ -406,6 +507,7 @@ export async function getMyTask(user: CurrentUser, taskId: string) {
     where: { id: taskId, ...myWorkScope(user) },
     include: {
       createdBy: { select: { id: true, name: true } },
+      team: { select: { managerId: true, manager: { select: { id: true, name: true } } } },
       parent: { select: { id: true, title: true } },
       ...activityInclude,
     },
@@ -414,10 +516,15 @@ export async function getMyTask(user: CurrentUser, taskId: string) {
   return task;
 }
 
+/** Who will review this task, as the assignee sees it. */
+export function reviewerLabel(task: { assigneeId: string; team: { managerId: string; manager: { name: string } } }) {
+  return reviewerIsOwner(task) ? "the owner" : task.team.manager.name;
+}
+
 async function transitionMyTask(
   user: CurrentUser,
   taskId: string,
-  to: TaskStatus,
+  to: "IN_PROGRESS" | "SUBMITTED",
   note?: string,
 ) {
   const task = await prisma.task.findFirst({
@@ -429,7 +536,9 @@ async function transitionMyTask(
     throw new DomainError(
       task.status === "COMPLETED"
         ? "This task is already completed."
-        : "That status change isn't allowed.",
+        : task.status === "SUBMITTED"
+          ? "This task is waiting for review."
+          : "That status change isn't allowed.",
     );
   }
 
@@ -437,7 +546,8 @@ async function transitionMyTask(
   const data: Prisma.TaskUpdateManyMutationInput =
     to === "IN_PROGRESS"
       ? { status: "IN_PROGRESS", startedAt: now }
-      : { status: "COMPLETED", completedAt: now, completionNote: note ?? null };
+      : // Handing in: the old feedback has been dealt with.
+        { status: "SUBMITTED", submittedAt: now, completionNote: note ?? null, reviewNote: null };
 
   await prisma.$transaction(async (tx) => {
     // Conditional update guards against double submits and concurrent changes.
@@ -452,12 +562,12 @@ async function transitionMyTask(
       data: {
         taskId: task.id,
         actorId: user.id,
-        type: to === "IN_PROGRESS" ? "STARTED" : "COMPLETED",
+        type: to === "IN_PROGRESS" ? "STARTED" : "SUBMITTED",
         fromStatus: task.status,
         toStatus: to,
         details:
-          to === "COMPLETED"
-            ? { onTime: completedOnTime({ completedAt: now, dueAt: task.dueAt }) }
+          to === "SUBMITTED"
+            ? { onTime: submittedOnTime({ submittedAt: now, dueAt: task.dueAt }) }
             : undefined,
       },
     });
@@ -468,6 +578,7 @@ export function startMyTask(user: CurrentUser, taskId: string) {
   return transitionMyTask(user, taskId, "IN_PROGRESS");
 }
 
-export function completeMyTask(user: CurrentUser, taskId: string, note: string) {
-  return transitionMyTask(user, taskId, "COMPLETED", note);
+/** Hands the work in for review. It only counts as done once the reviewer passes it. */
+export function submitMyTask(user: CurrentUser, taskId: string, note: string) {
+  return transitionMyTask(user, taskId, "SUBMITTED", note);
 }
