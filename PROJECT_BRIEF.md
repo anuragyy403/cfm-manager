@@ -14,7 +14,7 @@ Task tracking and management for a company with three levels: the owner, manager
 2. The owner role is never chosen at sign-up. It is granted with `npm run make-admin -- <email>`, which refuses if an owner already exists. Managers are promoted by the owner inside the app.
 3. Adding someone to a team is direct (no invitation to accept).
 4. Work counts as done only when it is **passed in review**. The assignee submits it for review (with a note on what they delivered); the reviewer passes it (optional feedback) or fails it (feedback required), which sends it back as In progress until it is resubmitted. The reviewer is the team's manager; for a manager's own work (from the owner or themselves) it is the owner. The owner may review anything. A lead can still reopen a passed task with a reason (logged, shown to the assignee as the change to make).
-5. Leads can edit, reassign and archive tasks; every change is logged. Only the owner can delete a task permanently (with its subtasks and history); archiving is the reversible option.
+5. Leads can edit, reassign and archive tasks; every change is logged.
 6. A completion note is required. File uploads and comments are deferred to a later phase.
 7. Employees see only their own tasks. Managers see only their own teams.
 8. Many teams (e.g. Tech, Business). Each team has one manager; a manager can run several teams; an employee is on one team.
@@ -34,8 +34,7 @@ Task tracking and management for a company with three levels: the owner, manager
 - Nobody can reach another role's pages or data — including via direct Server Action calls.
 - Lifecycle timestamps (assigned, started, submitted, completed) are set by the server only.
 - "Overdue" is derived (deadline passed and not completed), never stored.
-- Task history (`TaskActivity`) is append-only. It is only removed when the owner permanently deletes its task.
-- Only the owner can permanently delete a task (checked on the server).
+- Task history (`TaskActivity`) is append-only.
 - Removing someone from a team keeps their task history.
 
 ## Stack

@@ -18,7 +18,6 @@ import { canAddSubtask, canManageTask, canReview, isOwner } from "@/server/acces
 import type { CurrentUser } from "@/server/session";
 import { getTask, namesForActivities } from "@/server/tasks";
 import { listAssignableTeams } from "@/server/teams";
-import { DeleteTaskButton } from "../delete-task-button";
 import { NewTaskButton } from "../new-task-button";
 import { ReviewActions } from "../review-actions";
 import { TaskManageActions } from "../task-manage-actions";
@@ -106,9 +105,6 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
                 completed: task.status === "COMPLETED",
               }}
             />
-          )}
-          {isOwner(viewer) && (
-            <DeleteTaskButton taskId={task.id} title={task.title} subtaskCount={task.subtasks.length} base={base} />
           )}
         </div>
       </div>

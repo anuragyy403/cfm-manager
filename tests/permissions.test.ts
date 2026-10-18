@@ -17,7 +17,6 @@ import { setRole } from "@/server/people";
 import type { CurrentUser } from "@/server/session";
 import {
   createTask,
-  deleteTask,
   getMyTask,
   getTask,
   listMyTasks,
@@ -429,30 +428,6 @@ describe("manager review", () => {
 
     await reviewTask(mia, task.id, "PASS", null);
     expect((await getTeamAnalytics(mia))!.team).toMatchObject({ completed: 1, completedOnTime: 1, overdue: 0 });
-  });
-});
-
-describe("deleting tasks", () => {
-  it("only the owner can delete a task, and its subtasks and history go with it", async () => {
-    const parent = await createTask(owner, newTask(mia.id, tech));
-    const sub = await createTask(mia, { ...newTask(alice.id, tech), parentId: parent.id });
-    await submitMyTask(alice, sub.id, "Done.");
-
-    await expect(deleteTask(mia, parent.id)).rejects.toThrow(DomainError); // the team's manager
-    await expect(deleteTask(alice, sub.id)).rejects.toThrow(DomainError); // the assignee
-    expect(await prisma.task.count({ where: { id: { in: [parent.id, sub.id] } } })).toBe(2);
-
-    await deleteTask(owner, parent.id);
-    expect(await prisma.task.count({ where: { id: { in: [parent.id, sub.id] } } })).toBe(0);
-    expect(await prisma.taskActivity.count({ where: { taskId: { in: [parent.id, sub.id] } } })).toBe(0);
-    expect(await listMyTasks(alice)).toHaveLength(0);
-  });
-
-  it("deleting a subtask leaves the main task", async () => {
-    const parent = await createTask(mia, newTask(mia.id, tech));
-    const sub = await createTask(mia, { ...newTask(alice.id, tech), parentId: parent.id });
-    expect(await deleteTask(owner, sub.id)).toEqual({ parentId: parent.id });
-    expect(await prisma.task.count({ where: { id: parent.id } })).toBe(1);
   });
 });
 

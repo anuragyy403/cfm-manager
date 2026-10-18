@@ -335,19 +335,6 @@ export async function setTaskArchived(viewer: CurrentUser, taskId: string, archi
   });
 }
 
-/**
- * Permanently deletes a task, its subtasks and all their history. Owner only,
- * and it can't be undone (archiving is the reversible way to hide a task).
- */
-export async function deleteTask(viewer: CurrentUser, taskId: string) {
-  if (!isOwner(viewer)) throw new DomainError("Only the owner can delete tasks.");
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, parentId: true } });
-  if (!task) throw new DomainError("Task not found.");
-  // Subtasks and history rows are removed with it (onDelete: Cascade).
-  await prisma.task.delete({ where: { id: task.id } });
-  return { parentId: task.parentId };
-}
-
 export async function reopenTask(viewer: CurrentUser, taskId: string, reason: string) {
   const task = await findManageableTask(viewer, taskId);
   if (task.status !== "COMPLETED") throw new DomainError("Only completed tasks can be reopened.");

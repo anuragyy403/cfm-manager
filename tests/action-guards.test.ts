@@ -24,7 +24,7 @@ vi.mock("@/server/session", () => ({
 const { touched } = vi.hoisted(() => ({ touched: vi.fn() }));
 vi.mock("@/server/tasks", () =>
   Object.fromEntries(
-    ["createTask", "updateTask", "setTaskArchived", "deleteTask", "reopenTask", "reviewTask", "startMyTask", "submitMyTask"].map((n) => [
+    ["createTask", "updateTask", "setTaskArchived", "reopenTask", "reviewTask", "startMyTask", "submitMyTask"].map((n) => [
       n,
       touched,
     ]),
