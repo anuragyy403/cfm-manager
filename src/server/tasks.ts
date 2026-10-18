@@ -4,7 +4,7 @@ import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canMemberTransition, DUE_SOON_MS, reviewerIsOwner, submittedOnTime } from "@/lib/tasks/rules";
 import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
-import { canAddSubtask, canManageTask, canReview, DomainError, isOwner, myWorkScope, taskScope, teamScope } from "@/server/access";
+import { canAddSubtask, canManageTask, canReview, DomainError, isOwner, myActionScope, myTeamsWhere, myWorkScope, taskReadScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { isAssignableInTeam } from "@/server/teams";
 
@@ -138,10 +138,14 @@ const taskDetailInclude = {
   ...activityInclude,
 } satisfies Prisma.TaskInclude;
 
-/** A task a lead can see, with everything the detail page needs. 404 otherwise. */
+/**
+ * A task a lead can see, with everything the detail page needs. 404 otherwise.
+ * Includes earlier-team work of people now on the lead's teams (read only:
+ * every change goes through `taskScope`).
+ */
 export async function getTask(viewer: CurrentUser, taskId: string) {
   const task = await prisma.task.findFirst({
-    where: { id: taskId, ...taskScope(viewer) },
+    where: { id: taskId, ...taskReadScope(viewer) },
     include: taskDetailInclude,
   });
   if (!task) notFound();
@@ -229,6 +233,41 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
     }
     return task;
   });
+}
+
+/**
+ * Gives the same task to every employee on a team: each gets their own copy,
+ * so everyone's progress, hand-in and review are tracked separately.
+ */
+export async function createTeamTasks(viewer: CurrentUser, input: Omit<TaskInput, "assigneeId" | "parentId">) {
+  const team = await prisma.team.findFirst({
+    where: { id: input.teamId, ...teamScope(viewer) },
+    select: { id: true, members: { select: { userId: true } } },
+  });
+  if (!team) throw new DomainError("Choose one of your teams.");
+  if (team.members.length === 0) throw new DomainError("This team has no employees yet. Add people first.");
+
+  const dueAt = new Date(input.dueAt);
+  const tasks = await prisma.$transaction(
+    team.members.map(({ userId }) =>
+      prisma.task.create({
+        data: {
+          title: input.title,
+          description: input.description,
+          priority: input.priority,
+          dueAt,
+          teamId: team.id,
+          assigneeId: userId,
+          createdById: viewer.id,
+          activities: {
+            create: { actorId: viewer.id, type: "CREATED", toStatus: "PENDING", details: { wholeTeam: true } },
+          },
+        },
+        select: { id: true },
+      }),
+    ),
+  );
+  return tasks.map((t) => t.id);
 }
 
 /** Returns the task and whether it went to a new assignee (they get notified). */
@@ -502,18 +541,20 @@ export async function listMyTasks(user: CurrentUser, view: TaskView = "all") {
   });
 }
 
+/** One of my tasks. `onMyTeam` is false for work from a team I've since left (read only). */
 export async function getMyTask(user: CurrentUser, taskId: string) {
   const task = await prisma.task.findFirst({
     where: { id: taskId, ...myWorkScope(user) },
     include: {
       createdBy: { select: { id: true, name: true } },
-      team: { select: { managerId: true, manager: { select: { id: true, name: true } } } },
+      team: { select: { name: true, managerId: true, manager: { select: { id: true, name: true } } } },
       parent: { select: { id: true, title: true } },
       ...activityInclude,
     },
   });
   if (!task) notFound();
-  return task;
+  const onMyTeam = (await prisma.team.count({ where: { id: task.teamId, ...myTeamsWhere(user) } })) > 0;
+  return { ...task, onMyTeam };
 }
 
 /** Who will review this task, as the assignee sees it. */
@@ -528,10 +569,15 @@ async function transitionMyTask(
   note?: string,
 ) {
   const task = await prisma.task.findFirst({
-    where: { id: taskId, ...myWorkScope(user) },
+    where: { id: taskId, ...myActionScope(user) },
     select: { id: true, status: true, dueAt: true },
   });
-  if (!task) throw new DomainError("Task not found.");
+  if (!task) {
+    const mine = await prisma.task.count({ where: { id: taskId, ...myWorkScope(user) } });
+    throw new DomainError(
+      mine ? "This task is from a team you're no longer on. Ask that team's manager to reassign it." : "Task not found.",
+    );
+  }
   if (!canMemberTransition(task.status, to)) {
     throw new DomainError(
       task.status === "COMPLETED"

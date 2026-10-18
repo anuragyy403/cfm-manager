@@ -48,7 +48,13 @@ export default async function EmployeeTaskPage({ params }: PageProps<"/dashboard
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          <WorkActions taskId={task.id} status={task.status} reviewer={reviewer} resubmit={changesRequested(task)} />
+          {task.onMyTeam ? (
+            <WorkActions taskId={task.id} status={task.status} reviewer={reviewer} resubmit={changesRequested(task)} />
+          ) : (
+            <p className="max-w-xs rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+              From {task.team.name}, a team you&apos;re no longer on. Kept here as part of your record.
+            </p>
+          )}
         </div>
       </div>
 

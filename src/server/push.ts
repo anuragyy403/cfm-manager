@@ -244,3 +244,127 @@ export function notifyTaskReopened(taskId: string, actor: CurrentUser) {
     });
   });
 }
+
+// ─── Teams ──────────────────────────────────────────────────────────────────
+
+/** Where a team opens for each role: employees have one team page, leads open it by id. */
+function teamUrl(role: Role, teamId: string) {
+  return role === "MEMBER" ? `${HOME_PATHS.MEMBER}/team` : `${HOME_PATHS[role]}/teams/${teamId}`;
+}
+
+/** Everyone on a team (its manager and employees) except the people listed. */
+async function teamAudience(teamId: string, except: string[]) {
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: {
+      name: true,
+      manager: { select: { id: true, role: true } },
+      members: { select: { user: { select: { id: true, role: true } } } },
+    },
+  });
+  if (!team) return null;
+  const people = [team.manager, ...team.members.map((m) => m.user)].filter((p) => !except.includes(p.id));
+  return { name: team.name, people };
+}
+
+/**
+ * Someone joined or left a team. They hear about it themselves, and so does
+ * everyone else on the team (and on the team they left, when moved).
+ */
+export function notifyMembershipChanged(
+  change: { kind: "added"; teamId: string; userId: string; fromTeamId: string | null } | { kind: "removed"; teamId: string; userId: string },
+  actor: CurrentUser,
+) {
+  return safely("team change notice", async () => {
+    const person = await prisma.user.findUnique({ where: { id: change.userId }, select: { id: true, name: true, role: true } });
+    if (!person) return;
+    const except = [person.id, actor.id];
+    const team = await teamAudience(change.teamId, except);
+    if (!team) return;
+    const sends: Promise<number>[] = [];
+
+    if (change.kind === "added") {
+      sends.push(
+        sendPushToUser(person.id, {
+          title: `You've been added to ${team.name}`,
+          body: `${actor.name} added you. Open the app to see your team and manager.`,
+          url: teamUrl(person.role, change.teamId),
+          tag: `team-${person.id}`,
+        }),
+      );
+      for (const p of team.people) {
+        sends.push(
+          sendPushToUser(p.id, {
+            title: `${person.name} joined ${team.name}`,
+            body: `Added by ${actor.name}.`,
+            url: teamUrl(p.role, change.teamId),
+            tag: `team-${change.teamId}-${person.id}`,
+          }),
+        );
+      }
+      if (change.fromTeamId) {
+        const old = await teamAudience(change.fromTeamId, except);
+        for (const p of old?.people ?? []) {
+          sends.push(
+            sendPushToUser(p.id, {
+              title: `${person.name} left ${old!.name}`,
+              body: `${actor.name} moved them to ${team.name}. Their tasks and history stay with ${old!.name}.`,
+              url: teamUrl(p.role, change.fromTeamId),
+              tag: `team-${change.fromTeamId}-${person.id}`,
+            }),
+          );
+        }
+      }
+    } else {
+      sends.push(
+        sendPushToUser(person.id, {
+          title: `You've been removed from ${team.name}`,
+          body: `${actor.name} removed you. Your earlier tasks are still in My tasks.`,
+          url: HOME_PATHS[person.role],
+          tag: `team-${person.id}`,
+        }),
+      );
+      for (const p of team.people) {
+        sends.push(
+          sendPushToUser(p.id, {
+            title: `${person.name} left ${team.name}`,
+            body: `Removed by ${actor.name}.`,
+            url: teamUrl(p.role, change.teamId),
+            tag: `team-${change.teamId}-${person.id}`,
+          }),
+        );
+      }
+    }
+    await Promise.all(sends);
+  });
+}
+
+/** A team got a new manager: the team and the new manager hear about it. */
+export function notifyManagerChanged(teamId: string, actor: CurrentUser) {
+  return safely("manager change notice", async () => {
+    const team = await prisma.team.findUnique({
+      where: { id: teamId },
+      select: { name: true, manager: { select: { id: true, name: true, role: true } } },
+    });
+    if (!team) return;
+    const audience = await teamAudience(teamId, [actor.id, team.manager.id]);
+    await Promise.all([
+      team.manager.id !== actor.id
+        ? sendPushToUser(team.manager.id, {
+            title: `You now manage ${team.name}`,
+            body: `${actor.name} put you in charge of this team.`,
+            url: teamUrl(team.manager.role, teamId),
+            tag: `team-${teamId}-manager`,
+          })
+        : Promise.resolve(0),
+      ...(audience?.people ?? []).map((p) =>
+        sendPushToUser(p.id, {
+          title: `${team.manager.name} is now the manager of ${team.name}`,
+          body: "They'll assign and review your work from now on.",
+          url: teamUrl(p.role, teamId),
+          tag: `team-${teamId}-manager`,
+        }),
+      ),
+    ]);
+  });
+}

@@ -85,7 +85,7 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
           )}
         </div>
         <div className="flex shrink-0 flex-wrap gap-2">
-          {mine && !task.archivedAt && (
+          {mine && !task.archivedAt && task.team.managerId === viewer.id && (
             <WorkActions taskId={task.id} status={task.status} reviewer="the owner" resubmit={changesRequested(task)} />
           )}
           {manageable && (

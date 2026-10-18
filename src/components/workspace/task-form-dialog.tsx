@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { format } from "date-fns";
-import { CornerDownRight, Loader2 } from "lucide-react";
+import { CornerDownRight, Loader2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { UserAvatar } from "@/components/user-avatar";
 import { PRIORITY_LABELS, TASK_PRIORITIES, type TaskPriority } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
-import { createTaskAction, updateTaskAction } from "@/server/actions/lead";
+import { createTaskAction, createTeamTaskAction, updateTaskAction } from "@/server/actions/lead";
 
 export type AssigneeOption = {
   id: string;
@@ -41,6 +41,9 @@ export type AssigneeOption = {
 };
 
 export type TeamOption = { id: string; name: string; people: AssigneeOption[] };
+
+/** "Assign to" value meaning every employee on the team gets their own copy. */
+const WHOLE_TEAM = "__team__";
 
 export type EditableTask = {
   id: string;
@@ -94,6 +97,10 @@ export function TaskFormDialog({
   // The team is fixed when editing or adding a subtask; otherwise pick one (if there's a choice).
   const teamLocked = editing || !!parent;
   const people = teams.find((t) => t.id === teamId)?.people ?? [];
+  const employees = people.filter((p) => !p.isManager);
+  // Only for a brand-new task; edits and subtasks always go to one person.
+  const canAssignTeam = !editing && !parent && employees.length > 0;
+  const wholeTeam = canAssignTeam && assigneeId === WHOLE_TEAM;
   const minDue = format(new Date(), "yyyy-MM-dd'T'HH:mm");
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -114,6 +121,23 @@ export function TaskFormDialog({
     };
 
     setPending(true);
+    if (wholeTeam) {
+      // The schema drops the "whole team" assignee marker.
+      const res = await createTeamTaskAction(input);
+      setPending(false);
+      if (!res.ok) {
+        setErrors(res.fieldErrors ?? {});
+        toast.error(res.error);
+        return;
+      }
+      setErrors({});
+      onOpenChange(false);
+      toast.success(`Task assigned to ${res.data.count} ${res.data.count === 1 ? "person" : "people"}`, {
+        description: "Everyone on the team got their own copy to work on and hand in.",
+      });
+      router.push(`${base}/tasks?team=${teamId}`);
+      return;
+    }
     const res = editing ? await updateTaskAction(task.id, input) : await createTaskAction(input);
     setPending(false);
 
@@ -218,6 +242,21 @@ export function TaskFormDialog({
                     <SelectValue placeholder={teamId ? "Choose a person" : "Choose a team first"} />
                   </SelectTrigger>
                   <SelectContent>
+                    {canAssignTeam && (
+                      <SelectGroup>
+                        <SelectItem value={WHOLE_TEAM}>
+                          <span className="flex w-full items-center gap-2">
+                            <span className="flex size-6 items-center justify-center rounded-full bg-brand-navy text-white">
+                              <Users className="size-3.5" />
+                            </span>
+                            <span className="truncate font-medium">Whole team</span>
+                            <span className="ml-auto rounded-full bg-muted px-1.5 text-[11px] tabular-nums text-muted-foreground">
+                              {employees.length} {employees.length === 1 ? "person" : "people"}
+                            </span>
+                          </span>
+                        </SelectItem>
+                      </SelectGroup>
+                    )}
                     <PeopleGroup label="Manager" people={people.filter((p) => p.isManager)} />
                     <PeopleGroup label="Employees" people={people.filter((p) => !p.isManager)} />
                   </SelectContent>
@@ -228,6 +267,8 @@ export function TaskFormDialog({
                   <FieldDescription>Reopen the task to reassign it.</FieldDescription>
                 ) : editing ? (
                   <FieldDescription>Reassigning resets progress to pending.</FieldDescription>
+                ) : wholeTeam ? (
+                  <FieldDescription>Each employee gets their own copy to do and hand in.</FieldDescription>
                 ) : teamId && people.length === 0 ? (
                   <FieldDescription>This team has no one to assign yet. Add employees first.</FieldDescription>
                 ) : null}

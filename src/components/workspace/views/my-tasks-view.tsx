@@ -45,6 +45,8 @@ export async function MyTasksView({
   for (const t of all) counts[displayStatus(t, now)]++;
   const tasks = view === "all" ? all : all.filter((t) => displayStatus(t, now) === view);
   if (view === "COMPLETED") tasks.sort((a, b) => b.completedAt!.getTime() - a.completedAt!.getTime());
+  // Work from earlier teams stays here; name the team once there's more than one.
+  const manyTeams = new Set(all.map((t) => t.team.id)).size > 1;
 
   return (
     <>
@@ -86,7 +88,7 @@ export async function MyTasksView({
       ) : (
         <div className="space-y-2">
           {tasks.map((t) => (
-            <TaskListItem key={t.id} task={t} href={`${taskBase}/${t.id}`} context={t.parent ? `Part of ${t.parent.title}` : undefined} />
+            <TaskListItem key={t.id} task={t} href={`${taskBase}/${t.id}`} context={t.parent ? `Part of ${t.parent.title}` : manyTeams ? t.team.name : undefined} />
           ))}
         </div>
       )}

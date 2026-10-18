@@ -1,8 +1,10 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { after } from "next/server";
 import { type ActionResult, idSchema, roleChangeSchema } from "@/lib/validation";
 import { setRole } from "@/server/people";
+import { notifyManagerChanged } from "@/server/push";
 import { requireOwner } from "@/server/session";
 import { setTeamManager } from "@/server/teams";
 import { run } from "./result";
@@ -16,6 +18,7 @@ export async function setTeamManagerAction(teamId: unknown, userId: unknown): Pr
   if (!team.success || !id.success) return { ok: false, error: "Invalid request." };
   const res = await run(() => setTeamManager(owner, team.data, id.data));
   if (!res.ok) return res;
+  if (res.data) after(() => notifyManagerChanged(team.data, owner));
   refresh();
   return { ok: true };
 }

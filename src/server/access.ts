@@ -31,15 +31,43 @@ export function taskScope(user: CurrentUser): Prisma.TaskWhereInput {
 }
 
 /**
- * Tasks someone works on themselves: assigned to them, not archived, in a team
- * they are still part of (as an employee or as its manager).
+ * Tasks a lead can open and read (never change): everything in their teams,
+ * their own work, and the full record of anyone currently on one of their
+ * teams, including work from teams that person was on before.
+ */
+export function taskReadScope(user: CurrentUser): Prisma.TaskWhereInput {
+  if (isOwner(user)) return {};
+  if (user.role !== "MANAGER") return { id: { in: [] } };
+  return {
+    OR: [
+      { team: teamScope(user) },
+      { assigneeId: user.id },
+      { assignee: { memberships: { some: { team: { managerId: user.id } } } } },
+    ],
+  };
+}
+
+/**
+ * Tasks someone works on themselves: everything assigned to them that isn't
+ * archived, whichever team it was given in. Moving teams, leaving a team or
+ * being promoted never hides a person's own work from them.
  */
 export function myWorkScope(user: CurrentUser): Prisma.TaskWhereInput {
-  return {
-    assigneeId: user.id,
-    archivedAt: null,
-    team: { OR: [{ members: { some: { userId: user.id } } }, { managerId: user.id }] },
-  };
+  return { assigneeId: user.id, archivedAt: null };
+}
+
+/** Teams someone is on right now, as an employee or as its manager. */
+export function myTeamsWhere(user: CurrentUser): Prisma.TeamWhereInput {
+  return { OR: [{ members: { some: { userId: user.id } } }, { managerId: user.id }] };
+}
+
+/**
+ * Tasks someone can still start or hand in: their own, in a team they are on
+ * now. Work from a team they left stays visible but read only; that team's
+ * manager can reassign it.
+ */
+export function myActionScope(user: CurrentUser): Prisma.TaskWhereInput {
+  return { ...myWorkScope(user), team: myTeamsWhere(user) };
 }
 
 /**

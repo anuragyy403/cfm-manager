@@ -4,6 +4,7 @@ import { requireEmployee } from "@/server/session";
 const nav: NavItem[] = [
   { href: "/dashboard", label: "My day", shortLabel: "My day", icon: "overview", exact: true },
   { href: "/dashboard/tasks", label: "My tasks", shortLabel: "Tasks", icon: "myTasks" },
+  { href: "/dashboard/team", label: "My team", shortLabel: "Team", icon: "team" },
 ];
 
 export default async function MemberLayout({ children }: LayoutProps<"/dashboard">) {

@@ -38,6 +38,8 @@ export default async function MemberDashboardPage() {
   const tasks = await listMyTasks(member);
   const now = new Date();
   const m = computeMetrics(tasks, now);
+  // Work from earlier teams stays listed; name the team once there's more than one.
+  const manyTeams = new Set(tasks.map((t) => t.team.id)).size > 1;
 
   const todayKey = dayKey(now);
   const weekEnd = now.getTime() + 7 * 864e5;
@@ -153,11 +155,11 @@ export default async function MemberDashboardPage() {
                     </div>
                   ) : (
                     <>
-                      <TaskGroup title="Sent back to you" icon={RotateCcw} tone="text-amber-600" tasks={sentBack} />
-                      <TaskGroup title="Overdue" icon={AlertTriangle} tone="text-red-600" tasks={overdue} />
-                      <TaskGroup title="Due today" icon={Clock} tone="text-sun-deep" tasks={today} />
-                      <TaskGroup title="This week" icon={CalendarClock} tone="text-sky-600" tasks={week} />
-                      <TaskGroup title="Later" icon={CalendarDays} tone="text-muted-foreground" tasks={later} />
+                      <TaskGroup title="Sent back to you" icon={RotateCcw} tone="text-amber-600" tasks={sentBack} manyTeams={manyTeams} />
+                      <TaskGroup title="Overdue" icon={AlertTriangle} tone="text-red-600" tasks={overdue} manyTeams={manyTeams} />
+                      <TaskGroup title="Due today" icon={Clock} tone="text-sun-deep" tasks={today} manyTeams={manyTeams} />
+                      <TaskGroup title="This week" icon={CalendarClock} tone="text-sky-600" tasks={week} manyTeams={manyTeams} />
+                      <TaskGroup title="Later" icon={CalendarDays} tone="text-muted-foreground" tasks={later} manyTeams={manyTeams} />
                     </>
                   )}
                 </CardContent>
@@ -211,7 +213,7 @@ export default async function MemberDashboardPage() {
                   </CardHeader>
                   <CardContent className="space-y-2">
                     {inReview.map((t) => (
-                      <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} />
+                      <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} context={manyTeams ? t.team.name : undefined} />
                     ))}
                   </CardContent>
                 </Card>
@@ -227,7 +229,7 @@ export default async function MemberDashboardPage() {
                   ) : (
                     completed
                       .slice(0, 4)
-                      .map((t) => <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} />)
+                      .map((t) => <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} context={manyTeams ? t.team.name : undefined} />)
                   )}
                 </CardContent>
               </Card>
@@ -244,11 +246,13 @@ function TaskGroup({
   icon: Icon,
   tone,
   tasks,
+  manyTeams,
 }: {
   title: string;
   icon: typeof Clock;
   tone: string;
   tasks: Awaited<ReturnType<typeof listMyTasks>>;
+  manyTeams: boolean;
 }) {
   if (tasks.length === 0) return null;
   return (
@@ -262,7 +266,7 @@ function TaskGroup({
       </h3>
       <div className="space-y-2">
         {tasks.map((t) => (
-          <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} />
+          <TaskListItem key={t.id} task={t} href={`/dashboard/tasks/${t.id}`} context={manyTeams ? t.team.name : undefined} />
         ))}
       </div>
     </section>

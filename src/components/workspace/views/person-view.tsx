@@ -141,7 +141,7 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
             {tasks.length === 0 ? (
               <p className="px-6 text-sm text-muted-foreground">No tasks assigned yet.</p>
             ) : (
-              <TaskTable tasks={tasks} base={base} showAssignee={false} showTeam={owner} />
+              <TaskTable tasks={tasks} base={base} showAssignee={false} showTeam={owner || tasks.some((t) => t.team.id !== team?.id)} />
             )}
           </CardContent>
         </Card>

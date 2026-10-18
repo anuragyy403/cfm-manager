@@ -13,10 +13,11 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { DomainError } from "@/server/access";
 import { getTeamAnalytics } from "@/server/analytics";
-import { setRole } from "@/server/people";
+import { getPersonOverview, setRole } from "@/server/people";
 import type { CurrentUser } from "@/server/session";
 import {
   createTask,
+  createTeamTasks,
   getMyTask,
   getTask,
   listMyTasks,
@@ -29,7 +30,7 @@ import {
   submitMyTask,
   updateTask,
 } from "@/server/tasks";
-import { addMember, createTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
+import { addMember, createTeam, getMyTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
 
 type Role = "ADMIN" | "MANAGER" | "MEMBER";
 
@@ -252,10 +253,11 @@ describe("working on your own tasks", () => {
     expect(unchanged.status).toBe("PENDING");
   });
 
-  it("someone removed from the team loses access to its tasks, history is kept", async () => {
+  it("someone removed from the team still sees its tasks but can't work on them", async () => {
     const task = await createTask(mia, newTask(alice.id, tech));
     await removeMember(mia, tech, alice.id);
-    expect(await listMyTasks(alice)).toHaveLength(0);
+    expect(await listMyTasks(alice)).toHaveLength(1);
+    expect((await getMyTask(alice, task.id)).onMyTeam).toBe(false);
     await expect(startMyTask(alice, task.id)).rejects.toThrow(DomainError);
     expect(await prisma.task.count({ where: { id: task.id } })).toBe(1);
   });
@@ -454,6 +456,59 @@ describe("a person's record across teams", () => {
     // Business's manager sees only Business work.
     const inBusiness = (await getTeamAnalytics(noah))!.people.find((p) => p.user.id === alice.id)!;
     expect(inBusiness.metrics).toMatchObject({ total: 1, completed: 0 });
+  });
+
+  it("after a move the employee still sees all their own tasks, and can open old ones", async () => {
+    const before = await createTask(mia, newTask(alice.id, tech));
+    await addMember(owner, business, alice.id);
+    const now = await createTask(noah, newTask(alice.id, business));
+
+    expect((await listMyTasks(alice)).map((t) => t.id).sort()).toEqual([before.id, now.id].sort());
+    expect((await getMyTask(alice, before.id)).onMyTeam).toBe(false);
+    expect((await getMyTask(alice, now.id)).onMyTeam).toBe(true);
+    // Old-team work is read only; the new team's work can be done.
+    await expect(startMyTask(alice, before.id)).rejects.toThrow(DomainError);
+    await startMyTask(alice, now.id);
+  });
+
+  it("a person's new manager sees their whole record on their profile, read only", async () => {
+    const before = await createTask(mia, newTask(alice.id, tech));
+    await addMember(owner, business, alice.id);
+    await createTask(noah, newTask(alice.id, business));
+
+    const profile = await getPersonOverview(noah, alice.id);
+    expect(profile.tasks).toHaveLength(2);
+    expect((await getTask(noah, before.id)).id).toBe(before.id);
+    await expect(setTaskArchived(noah, before.id, true)).rejects.toThrow(DomainError);
+
+    // The old manager keeps only the work done on their team.
+    expect((await getPersonOverview(mia, alice.id)).tasks).toHaveLength(1);
+  });
+
+  it("a promoted employee keeps seeing the tasks they had as an employee", async () => {
+    await createTask(mia, newTask(alice.id, tech));
+    await setRole(owner, alice.id, "MANAGER");
+    expect(await listMyTasks(await fresh(alice))).toHaveLength(1);
+  });
+});
+
+describe("my team and whole-team tasks", () => {
+  it("an employee sees their team, its manager and its members", async () => {
+    const team = await getMyTeam(alice);
+    expect(team?.name).toBe("Tech");
+    expect(team?.manager.id).toBe(mia.id);
+    expect(team?.members.map((m) => m.user.id).sort()).toEqual([alice.id, bob.id].sort());
+    expect(await getMyTeam(olivia)).toBeNull();
+  });
+
+  it("a whole-team task gives every employee their own copy", async () => {
+    const { assigneeId: _, ...input } = newTask(alice.id, tech);
+    const ids = await createTeamTasks(mia, input);
+    expect(ids).toHaveLength(2);
+    expect(await listMyTasks(alice)).toHaveLength(1);
+    expect(await listMyTasks(bob)).toHaveLength(1);
+    // A manager can't send one to someone else's team.
+    await expect(createTeamTasks(mia, { ...input, teamId: business })).rejects.toThrow(DomainError);
   });
 });
 

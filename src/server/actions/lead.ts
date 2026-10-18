@@ -11,9 +11,10 @@ import {
   taskInputSchema,
   taskUpdateSchema,
   teamSchema,
+  teamTaskInputSchema,
 } from "@/lib/validation";
 import { sendMemberPasswordReset } from "@/server/password-reset";
-import { notifyTaskAssigned, notifyTaskReopened, notifyTaskReviewed } from "@/server/push";
+import { notifyMembershipChanged, notifyTaskAssigned, notifyTaskReopened, notifyTaskReviewed } from "@/server/push";
 import { requireLead } from "@/server/session";
 import * as tasks from "@/server/tasks";
 import * as teams from "@/server/teams";
@@ -72,10 +73,15 @@ export async function addMemberAction(
   if (!team.success || !id.success) return { ok: false, error: "Invalid request." };
   const res = await run(async () => {
     const user = await teams.addMember(lead, team.data, id.data);
-    return { name: user.name, movedFrom: "movedFrom" in user ? user.movedFrom : null };
+    // No `movedFrom`: they were already on this team, nothing changed.
+    const added = "movedFrom" in user;
+    return { name: user.name, movedFrom: added ? user.movedFrom : null, fromTeamId: added ? user.movedFromTeamId : null, added };
   });
-  if (res.ok) refresh();
-  return res;
+  if (!res.ok) return res;
+  const { name, movedFrom, fromTeamId, added } = res.data;
+  if (added) after(() => notifyMembershipChanged({ kind: "added", teamId: team.data, userId: id.data, fromTeamId }, lead));
+  refresh();
+  return { ok: true, data: { name, movedFrom } };
 }
 
 export async function removeMemberAction(teamId: unknown, userId: unknown): Promise<ActionResult> {
@@ -85,6 +91,7 @@ export async function removeMemberAction(teamId: unknown, userId: unknown): Prom
   if (!team.success || !id.success) return { ok: false, error: "Invalid request." };
   const res = await run(() => teams.removeMember(lead, team.data, id.data));
   if (!res.ok) return res;
+  after(() => notifyMembershipChanged({ kind: "removed", teamId: team.data, userId: id.data }, lead));
   refresh();
   return { ok: true };
 }
@@ -115,6 +122,19 @@ export async function createTaskAction(input: unknown): Promise<ActionResult<{ i
     refresh();
   }
   return res;
+}
+
+/** Same task to everyone on a team; each employee is notified about their copy. */
+export async function createTeamTaskAction(input: unknown): Promise<ActionResult<{ count: number }>> {
+  const lead = await requireLead();
+  const parsed = teamTaskInputSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: INVALID_FIELDS, fieldErrors: fieldErrorsOf(parsed.error) };
+  const res = await run(() => tasks.createTeamTasks(lead, parsed.data));
+  if (!res.ok) return res;
+  const ids = res.data;
+  after(() => Promise.all(ids.map((id) => notifyTaskAssigned(id, lead))));
+  refresh();
+  return { ok: true, data: { count: ids.length } };
 }
 
 export async function updateTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {

@@ -23,6 +23,9 @@ export const taskInputSchema = z.object({
 });
 export type TaskInput = z.infer<typeof taskInputSchema>;
 
+/** One task for every employee on a team. */
+export const teamTaskInputSchema = taskInputSchema.omit({ assigneeId: true, parentId: true });
+
 /** Editing never moves a task to another team or parent. */
 export const taskUpdateSchema = taskInputSchema.omit({ teamId: true, parentId: true });
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;

@@ -2,7 +2,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { computeMetrics } from "@/lib/tasks/metrics";
-import { DomainError, isOwner, taskScope } from "@/server/access";
+import { DomainError, isOwner, taskReadScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { taskListSelect } from "@/server/tasks";
 
@@ -40,12 +40,12 @@ export async function listPeople(owner: CurrentUser) {
 
 /**
  * Everything a lead may see about one person: profile, team, metrics, tasks
- * and recent activity. The owner sees anyone; a manager sees people on their
- * teams (and former members who still have tasks there), limited to the
- * manager's own teams.
+ * and recent activity. The owner sees anyone. A manager sees the whole record
+ * of people now on their teams (work from earlier teams included), and only
+ * the work done on their teams for former members.
  */
 export async function getPersonOverview(viewer: CurrentUser, userId: string) {
-  const scope = taskScope(viewer);
+  const scope = taskReadScope(viewer);
   const [user, tasks] = await Promise.all([
     prisma.user.findUnique({
       where: { id: userId },

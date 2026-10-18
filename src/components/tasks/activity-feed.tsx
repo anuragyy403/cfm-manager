@@ -66,6 +66,7 @@ type Details = {
   title?: string;
   assigneeId?: string;
   withParent?: boolean;
+  wholeTeam?: boolean;
   note?: string | null;
 };
 
@@ -73,7 +74,7 @@ function describe(a: FeedActivity, names: Record<string, string>) {
   const d = (a.details ?? {}) as Details;
   switch (a.type) {
     case "CREATED":
-      return "created and assigned the task";
+      return d.wholeTeam ? "created and assigned the task to the whole team" : "created and assigned the task";
     case "UPDATED":
       return `updated ${d.fields?.join(", ") ?? "the task"}`;
     case "REASSIGNED": {

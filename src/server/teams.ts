@@ -105,11 +105,12 @@ export async function updateTeam(
 /**
  * Owner only: puts someone in charge of a team. Choosing an employee of this
  * team promotes them to manager and takes them off the employee list.
+ * Returns null when they already run it.
  */
 export async function setTeamManager(owner: CurrentUser, teamId: string, userId: string) {
   if (!isOwner(owner)) throw new DomainError("Only the owner can change a team's manager.");
   const team = await requireTeam(owner, teamId);
-  if (team.managerId === userId) return team;
+  if (team.managerId === userId) return null;
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -288,7 +289,7 @@ export async function addMember(viewer: CurrentUser, teamId: string, userId: str
     if (current) await tx.teamMember.deleteMany({ where: { userId } });
     await tx.teamMember.create({ data: { teamId: team.id, userId, addedById: viewer.id } });
   });
-  return { ...user, movedFrom: current?.team.name ?? null };
+  return { ...user, movedFrom: current?.team.name ?? null, movedFromTeamId: current?.teamId ?? null };
 }
 
 /**
@@ -299,4 +300,30 @@ export async function removeMember(viewer: CurrentUser, teamId: string, userId: 
   const team = await requireTeam(viewer, teamId);
   const { count } = await prisma.teamMember.deleteMany({ where: { teamId: team.id, userId } });
   if (count === 0) throw new DomainError("That person isn't on this team.");
+}
+
+/**
+ * The employee's own team as they see it: its name, manager and everyone on
+ * it. Only names and usernames are shown to each other, never emails.
+ */
+export async function getMyTeam(user: CurrentUser) {
+  const membership = await prisma.teamMember.findUnique({
+    where: { userId: user.id },
+    select: {
+      joinedAt: true,
+      team: {
+        select: {
+          id: true,
+          name: true,
+          description: true,
+          manager: { select: { id: true, name: true, username: true, role: true } },
+          members: {
+            orderBy: { user: { name: "asc" } },
+            select: { joinedAt: true, user: { select: { id: true, name: true, username: true } } },
+          },
+        },
+      },
+    },
+  });
+  return membership ? { ...membership.team, joinedAt: membership.joinedAt } : null;
 }
