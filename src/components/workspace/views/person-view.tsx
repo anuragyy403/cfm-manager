@@ -20,9 +20,10 @@ import { UserAvatar } from "@/components/user-avatar";
 import { formatDate, formatDuration, formatPercent } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/roles";
 import { isOwner } from "@/server/access";
-import { getPersonOverview } from "@/server/people";
+import { employeeDeletionSummary, getPersonOverview } from "@/server/people";
 import type { CurrentUser } from "@/server/session";
 import { listAssignableTeams } from "@/server/teams";
+import { DeleteEmployeeButton } from "../delete-employee-button";
 import { NewTaskButton } from "../new-task-button";
 import { RoleButton } from "../role-button";
 import { SendResetButton } from "../send-reset-button";
@@ -31,6 +32,8 @@ import { SendResetButton } from "../send-reset-button";
 export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser; base: string; userId: string }) {
   const owner = isOwner(viewer);
   const { user, team, joinedAt, onViewersTeam, tasks, metrics, activities } = await getPersonOverview(viewer, userId);
+  // The owner can delete an employee who has left (with their tasks).
+  const deletion = owner && user.role === "MEMBER" ? await employeeDeletionSummary(viewer, user.id) : null;
 
   // Teams this person can get new work in, so "New task" can preselect them.
   const assignable = (await listAssignableTeams(viewer)).filter((t) => t.people.some((p) => p.id === user.id));
@@ -79,6 +82,15 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
             <div className="flex flex-wrap items-center gap-2">
               {owner && user.role !== "ADMIN" && (
                 <RoleButton userId={user.id} name={user.name} role={user.role} teamName={team?.name} />
+              )}
+              {deletion && (
+                <DeleteEmployeeButton
+                  userId={user.id}
+                  name={user.name}
+                  tasks={deletion.tasks}
+                  open={deletion.open}
+                  base={base}
+                />
               )}
               {(owner ? user.role !== "ADMIN" : user.role === "MEMBER") && (
                 <SendResetButton userId={user.id} name={user.name} email={user.email} />

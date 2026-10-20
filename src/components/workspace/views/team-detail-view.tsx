@@ -21,8 +21,9 @@ import type { TaskMetrics } from "@/lib/tasks/metrics";
 import { canChangeTeams, isOwner, seesAllTeams } from "@/server/access";
 import { getTeamAnalytics } from "@/server/analytics";
 import type { CurrentUser } from "@/server/session";
-import { getTeam, listAssignableTeams, listManagerCandidates } from "@/server/teams";
+import { getTeam, listAssignableTeams, listManagerCandidates, teamDeletionSummary } from "@/server/teams";
 import { AddMember } from "../add-member";
+import { DeleteTeamButton } from "../delete-team-button";
 import { MemberActions } from "../member-actions";
 import { NewTaskButton } from "../new-task-button";
 import { ChangeManagerDialog, EditTeamDialog } from "../team-dialogs";
@@ -34,10 +35,11 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
   const canEdit = canChangeTeams(viewer);
   const seesEveryone = seesAllTeams(viewer);
   const team = await getTeam(viewer, teamId);
-  const [analytics, assignable, managers] = await Promise.all([
+  const [analytics, assignable, managers, deletion] = await Promise.all([
     getTeamAnalytics(viewer, { teamId }),
     listAssignableTeams(viewer, teamId),
     owner ? listManagerCandidates() : Promise.resolve([]),
+    owner ? teamDeletionSummary(viewer, teamId) : Promise.resolve(null),
   ]);
   const t = analytics!.team;
   const managerRow = analytics!.members.find((m) => m.isManager);
@@ -71,6 +73,16 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
             )}
             {canEdit && <AddMember teamId={team.id} canMove={owner} />}
             <NewTaskButton teams={assignable} base={base} defaultTeamId={team.id} variant="outline" />
+            {deletion && (
+              <DeleteTeamButton
+                teamId={team.id}
+                name={team.name}
+                tasks={deletion.tasks}
+                employees={employees.length}
+                otherTeams={deletion.otherTeams}
+                base={base}
+              />
+            )}
           </>
         }
       />

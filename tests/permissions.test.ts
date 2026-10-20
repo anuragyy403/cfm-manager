@@ -13,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { prisma } from "@/lib/prisma";
 import { DomainError } from "@/server/access";
 import { getTeamAnalytics } from "@/server/analytics";
-import { getPersonOverview, setRole } from "@/server/people";
+import { deleteEmployee, getPersonOverview, setRole } from "@/server/people";
 import type { CurrentUser } from "@/server/session";
 import {
   createTask,
@@ -31,7 +31,7 @@ import {
   submitMyTask,
   updateTask,
 } from "@/server/tasks";
-import { addMember, createTeam, getMyTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
+import { addMember, createTeam, deleteTeam, getMyTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
 
 type Role = "ADMIN" | "HR" | "MANAGER" | "MEMBER";
 
@@ -535,6 +535,60 @@ describe("deleting tasks", () => {
     const sub = await createTask(mia, { ...newTask(alice.id, tech), parentId: parent.id });
     expect(await deleteTask(owner, sub.id)).toEqual({ parentId: parent.id });
     expect(await prisma.task.count({ where: { id: parent.id } })).toBe(1);
+  });
+});
+
+describe("deleting employees and teams", () => {
+  it("only the owner deletes an employee: account, sign-in and their tasks go; others' subtasks stay", async () => {
+    const theirs = await createTask(mia, newTask(alice.id, tech));
+    const bobsPart = await createTask(mia, { ...newTask(bob.id, tech), parentId: theirs.id });
+    await submitMyTask(alice, theirs.id, "Done.");
+    await prisma.session.create({
+      data: { id: randomUUID(), token: randomUUID(), userId: alice.id, expiresAt: new Date(Date.now() + 864e5) },
+    });
+
+    await expect(deleteEmployee(mia, alice.id)).rejects.toThrow(DomainError); // a manager
+    await expect(deleteEmployee(owner, mia.id)).rejects.toThrow(DomainError); // not an employee
+    await expect(deleteEmployee(owner, owner.id)).rejects.toThrow(DomainError);
+
+    expect(await deleteEmployee(owner, alice.id)).toEqual({ name: alice.name, deletedTasks: 1 });
+    expect(await prisma.user.count({ where: { id: alice.id } })).toBe(0);
+    expect(await prisma.session.count({ where: { userId: alice.id } })).toBe(0);
+    expect(await prisma.task.count({ where: { id: theirs.id } })).toBe(0);
+    expect(await prisma.taskActivity.count({ where: { taskId: theirs.id } })).toBe(0);
+    const kept = await prisma.task.findUniqueOrThrow({ where: { id: bobsPart.id } });
+    expect(kept.parentId).toBeNull();
+  });
+
+  it("won't delete someone whose actions are part of other people's task history", async () => {
+    const alicesTask = await createTask(mia, newTask(alice.id, tech));
+    await prisma.taskActivity.create({ data: { taskId: alicesTask.id, actorId: bob.id, type: "UPDATED" } });
+    await expect(deleteEmployee(owner, bob.id)).rejects.toThrow(DomainError);
+    expect(await prisma.user.count({ where: { id: bob.id } })).toBe(1);
+  });
+
+  it("only the owner deletes a team; its tasks move to another team first so records stay", async () => {
+    const work = await createTask(mia, newTask(alice.id, tech));
+    await submitMyTask(alice, work.id, "Done.");
+    await reviewTask(mia, work.id, "PASS", null);
+
+    await expect(deleteTeam(mia, tech, business)).rejects.toThrow(DomainError);
+    await expect(deleteTeam(owner, tech, null)).rejects.toThrow(DomainError); // has tasks: needs a target
+    await expect(deleteTeam(owner, tech, tech)).rejects.toThrow(DomainError);
+
+    expect(await deleteTeam(owner, tech, business)).toMatchObject({ movedTasks: 1, movedTo: "Business", employees: 2 });
+    expect(await prisma.team.count({ where: { id: tech } })).toBe(0);
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: work.id } })).teamId).toBe(business);
+    expect(await prisma.teamMember.count({ where: { userId: alice.id } })).toBe(0); // now without a team
+    expect(await prisma.user.count({ where: { id: alice.id } })).toBe(1); // account stays
+    // Her record still counts the work.
+    const record = (await getTeamAnalytics(owner))!.people.find((p) => p.user.id === alice.id)!;
+    expect(record.metrics).toMatchObject({ total: 1, completed: 1 });
+  });
+
+  it("a team with no tasks is deleted straight away", async () => {
+    const design = await createTeam(owner, { name: "Design", description: "", managerId: noah.id });
+    expect(await deleteTeam(owner, design.id, null)).toMatchObject({ movedTasks: 0, movedTo: null });
   });
 });
 

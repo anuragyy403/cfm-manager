@@ -38,6 +38,8 @@ Task tracking and management for a company with three levels: the owner, manager
 - "Overdue" is derived (deadline passed and not completed), never stored.
 - Task history (`TaskActivity`) is append-only. It is only removed when the owner permanently deletes its task.
 - Only the owner can permanently delete a task (checked on the server); HR and managers can archive.
+- Only the owner can delete an employee account (employees only; leads are changed to employee first). Their tasks and those tasks' history go with it; other people's subtasks under them are kept. Someone whose actions are in other people's task history can't be deleted.
+- Only the owner can delete a team. Its tasks first move to another team the owner chooses, so no one's work record is lost; its employees end up without a team.
 - Removing someone from a team keeps their task history.
 
 ## Stack

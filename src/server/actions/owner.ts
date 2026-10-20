@@ -3,11 +3,11 @@
 import { refresh } from "next/cache";
 import { after } from "next/server";
 import { type ActionResult, idSchema, roleChangeSchema } from "@/lib/validation";
-import { setRole } from "@/server/people";
+import { deleteEmployee, setRole } from "@/server/people";
 import { notifyManagerChanged } from "@/server/push";
 import { requireOwner } from "@/server/session";
 import { deleteTask } from "@/server/tasks";
-import { setTeamManager } from "@/server/teams";
+import { deleteTeam, setTeamManager } from "@/server/teams";
 import { run } from "./result";
 
 /** Owner-only Server Actions. Each re-checks the role itself. */
@@ -33,6 +33,29 @@ export async function deleteTaskAction(taskId: unknown): Promise<ActionResult<{ 
   const id = idSchema.safeParse(taskId);
   if (!id.success) return { ok: false, error: "Invalid task." };
   return run(() => deleteTask(owner, id.data));
+}
+
+/** Deletes an employee's account (someone who has left), with their tasks. */
+export async function deleteEmployeeAction(userId: unknown): Promise<ActionResult<{ name: string; deletedTasks: number }>> {
+  const owner = await requireOwner();
+  const id = idSchema.safeParse(userId);
+  if (!id.success) return { ok: false, error: "Invalid person." };
+  return run(() => deleteEmployee(owner, id.data));
+}
+
+/** Deletes a team; its tasks move to `moveTasksTo` first so nobody's record is lost. */
+export async function deleteTeamAction(
+  teamId: unknown,
+  moveTasksTo: unknown,
+): Promise<ActionResult<{ name: string; movedTasks: number; movedTo: string | null }>> {
+  const owner = await requireOwner();
+  const id = idSchema.safeParse(teamId);
+  const target = moveTasksTo === null ? { success: true as const, data: null } : idSchema.safeParse(moveTasksTo);
+  if (!id.success || !target.success) return { ok: false, error: "Invalid request." };
+  const res = await run(() => deleteTeam(owner, id.data, target.data));
+  if (!res.ok) return res;
+  const { name, movedTasks, movedTo } = res.data;
+  return { ok: true, data: { name, movedTasks, movedTo } };
 }
 
 export async function setRoleAction(userId: unknown, role: unknown): Promise<ActionResult> {

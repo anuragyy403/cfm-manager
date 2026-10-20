@@ -340,3 +340,46 @@ export async function getMyTeam(user: CurrentUser) {
   });
   return membership ? { ...membership.team, joinedAt: membership.joinedAt } : null;
 }
+
+/**
+ * Owner only: deletes a team. Every task given in it (with its history) first
+ * moves to `moveTasksToTeamId`, so no one's work record is lost; deleting a
+ * team would otherwise delete its tasks. A team with no tasks needs no target.
+ * Its employees end up without a team, ready to be added elsewhere.
+ */
+export async function deleteTeam(owner: CurrentUser, teamId: string, moveTasksToTeamId: string | null) {
+  if (!isOwner(owner)) throw new DomainError("Only the owner can delete teams.");
+  const team = await prisma.team.findUnique({
+    where: { id: teamId },
+    select: { id: true, name: true, _count: { select: { tasks: true, members: true } } },
+  });
+  if (!team) throw new DomainError("Team not found.");
+
+  const taskCount = team._count.tasks;
+  let target: { id: string; name: string } | null = null;
+  if (taskCount > 0) {
+    if (!moveTasksToTeamId) {
+      throw new DomainError(`${team.name} has ${taskCount} task${taskCount === 1 ? "" : "s"}. Choose a team to move them to first.`);
+    }
+    if (moveTasksToTeamId === team.id) throw new DomainError("Choose a different team to move the tasks to.");
+    target = await prisma.team.findUnique({ where: { id: moveTasksToTeamId }, select: { id: true, name: true } });
+    if (!target) throw new DomainError("The team to move the tasks to no longer exists.");
+  }
+
+  return prisma.$transaction(async (tx) => {
+    if (target) await tx.task.updateMany({ where: { teamId: team.id }, data: { teamId: target.id } });
+    // Memberships go with the team; the people and their accounts stay.
+    await tx.team.delete({ where: { id: team.id } });
+    return { name: team.name, movedTasks: taskCount, movedTo: target?.name ?? null, employees: team._count.members };
+  });
+}
+
+/** What deleting a team involves, for the confirmation dialog. Owner only. */
+export async function teamDeletionSummary(owner: CurrentUser, teamId: string) {
+  if (!isOwner(owner)) throw new DomainError("Only the owner can delete teams.");
+  const [tasks, otherTeams] = await Promise.all([
+    prisma.task.count({ where: { teamId } }),
+    prisma.team.findMany({ where: { id: { not: teamId } }, orderBy: { name: "asc" }, select: { id: true, name: true } }),
+  ]);
+  return { tasks, otherTeams };
+}
