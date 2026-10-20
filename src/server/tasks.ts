@@ -6,7 +6,7 @@ import { canMemberTransition, DUE_SOON_MS, reviewerIsOwner, submittedOnTime } fr
 import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
 import { canAddSubtask, canManageTask, canReview, DomainError, isHR, isOwner, myActionScope, myTeamsWhere, myWorkScope, taskReadScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
-import { isAssignableInTeam } from "@/server/teams";
+import { hrDeskTeamId, isAssignableInTeam } from "@/server/teams";
 
 /**
  * Task data access.
@@ -31,7 +31,7 @@ export const taskListSelect = {
   reviewNote: true,
   timesFailed: true,
   parentId: true,
-  assignee: { select: { id: true, name: true, username: true } },
+  assignee: { select: { id: true, name: true, username: true, deletedAt: true } },
   team: { select: { id: true, name: true } },
   parent: { select: { id: true, title: true } },
   _count: { select: { subtasks: { where: { archivedAt: null } } } },
@@ -122,7 +122,7 @@ export async function countTasksByView(viewer: CurrentUser, filters: { teamId?: 
 }
 
 const taskDetailInclude = {
-  assignee: { select: { id: true, name: true, username: true, email: true, role: true } },
+  assignee: { select: { id: true, name: true, username: true, email: true, role: true, deletedAt: true } },
   createdBy: { select: { id: true, name: true, role: true } },
   team: {
     select: {
@@ -176,8 +176,14 @@ async function findManageableTask(viewer: CurrentUser, taskId: string) {
   return task;
 }
 
-/** The assignee must be on the team (or head it), and only the owner gives work to HR. */
+const NOT_YOURSELF = "You can't give a task to yourself. Your work is assigned by the person above you.";
+
+/**
+ * The assignee must be on the team (or head it), and only the owner gives
+ * work to HR. Nobody assigns work to themselves.
+ */
 async function assertAssignable(viewer: CurrentUser, teamId: string, assigneeId: string) {
+  if (assigneeId === viewer.id) throw new DomainError(NOT_YOURSELF);
   if (!(await isAssignableInTeam(teamId, assigneeId))) {
     throw new DomainError("Tasks can only be assigned to this team's manager or its employees.");
   }
@@ -189,13 +195,21 @@ async function assertAssignable(viewer: CurrentUser, teamId: string, assigneeId:
 
 /**
  * Creates a task, or a subtask when `parentId` is set. A subtask always lives
- * in its parent's team and is logged on the parent as well.
+ * in its parent's team and is logged on the parent as well. Work for HR needs
+ * no team from the form: it goes to the HR team (see `hrDeskTeamId`).
  */
 export async function createTask(viewer: CurrentUser, input: TaskInput) {
+  if (input.assigneeId === viewer.id) throw new DomainError(NOT_YOURSELF);
   let teamId = input.teamId;
   let parentId: string | null = null;
+  const hr = input.parentId
+    ? null
+    : await prisma.user.findFirst({ where: { id: input.assigneeId, role: "HR" }, select: { id: true, name: true } });
 
-  if (input.parentId) {
+  if (hr) {
+    if (!isOwner(viewer)) throw new DomainError("Only the owner can give work to HR.");
+    teamId = await hrDeskTeamId(hr);
+  } else if (input.parentId) {
     const parent = await findTaskInScope(viewer, input.parentId);
     if (!canAddSubtask(viewer, parent)) {
       throw new DomainError(
@@ -209,8 +223,10 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
     teamId = parent.teamId;
     parentId = parent.id;
   } else {
-    const team = await prisma.team.findFirst({ where: { id: teamId, ...teamScope(viewer) }, select: { id: true } });
-    if (!team) throw new DomainError("Choose one of your teams.");
+    const team = teamId
+      ? await prisma.team.findFirst({ where: { id: teamId, ...teamScope(viewer) }, select: { id: true } })
+      : null;
+    if (!team) throw new DomainError(teamId ? "Choose one of your teams." : "Choose which team this task is for.");
   }
   await assertAssignable(viewer, teamId, input.assigneeId);
 
@@ -254,11 +270,12 @@ export async function createTeamTasks(viewer: CurrentUser, input: Omit<TaskInput
     select: { id: true, members: { select: { userId: true } } },
   });
   if (!team) throw new DomainError("Choose one of your teams.");
-  if (team.members.length === 0) throw new DomainError("This team has no employees yet. Add people first.");
+  const members = team.members.filter((m) => m.userId !== viewer.id);
+  if (members.length === 0) throw new DomainError("This team has no employees yet. Add people first.");
 
   const dueAt = new Date(input.dueAt);
   const tasks = await prisma.$transaction(
-    team.members.map(({ userId }) =>
+    members.map(({ userId }) =>
       prisma.task.create({
         data: {
           title: input.title,
@@ -384,13 +401,32 @@ export async function setTaskArchived(viewer: CurrentUser, taskId: string, archi
 }
 
 /**
- * Permanently deletes a task, its subtasks and all their history. Owner only
- * (not HR), and it can't be undone: archiving is the reversible way to hide a task.
+ * Permanently deletes a task, its subtasks and all their history. Only the
+ * person who assigned it may (not even the owner otherwise), and only while
+ * every subtask under it is theirs too: nobody's assignments are removed by
+ * someone else. It can't be undone: archiving is the reversible way to hide a task.
  */
 export async function deleteTask(viewer: CurrentUser, taskId: string) {
-  if (!isOwner(viewer)) throw new DomainError("Only the owner can delete tasks.");
-  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, parentId: true } });
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true,
+      parentId: true,
+      createdById: true,
+      createdBy: { select: { name: true } },
+      _count: { select: { subtasks: { where: { createdById: { not: viewer.id } } } } },
+    },
+  });
   if (!task) throw new DomainError("Task not found.");
+  if (task.createdById !== viewer.id) {
+    throw new DomainError(`Only ${task.createdBy.name}, who assigned this task, can delete it.`);
+  }
+  const others = task._count.subtasks;
+  if (others > 0) {
+    throw new DomainError(
+      `${others} subtask${others === 1 ? " under it was" : "s under it were"} assigned by someone else. Only they can delete ${others === 1 ? "it" : "those"}, so this task can't be deleted yet. Archive it instead.`,
+    );
+  }
   // Subtasks and history rows are removed with it (onDelete: Cascade).
   await prisma.task.delete({ where: { id: task.id } });
   return { parentId: task.parentId };

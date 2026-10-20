@@ -114,7 +114,8 @@ export async function AnalyticsView({
   // Managers open employee profiles only; the owner and HR can open anyone's.
   const personHref = (p: PersonPerformance) =>
     owner || p.role === "MEMBER" ? `${base}/people/${p.user.id}` : undefined;
-  const roleOf = (p: PersonPerformance) => (p.role === "HR" ? "HR" : p.role === "MANAGER" ? "Manager" : "Employee");
+  const roleOf = (p: PersonPerformance) =>
+    p.deleted ? "Deleted account" : p.role === "HR" ? "HR" : p.role === "MANAGER" ? "Manager" : "Employee";
   // Where they are now; their record still counts work from earlier teams.
   const whereNow = (p: PersonPerformance) =>
     p.currentTeams.length ? p.currentTeams.join(", ") : "No longer on these teams";
@@ -202,6 +203,7 @@ export async function AnalyticsView({
     name: p.user.name,
     username: p.user.username,
     isYou: p.user.id === viewer.id,
+    deleted: p.deleted,
     search: p.currentTeams.join(" "),
     href: personHref(p),
     total: p.metrics.total,

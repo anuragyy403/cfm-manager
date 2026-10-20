@@ -15,15 +15,15 @@ import {
 } from "@/components/ui/dialog";
 import { Field, FieldDescription, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { DeletedTag } from "@/components/deleted-tag";
 import { deleteEmployeeAction } from "@/server/actions/owner";
 
-/** Owner only: delete the account of an employee who has left, with their tasks. */
+/** Owner only: delete the account of an employee who has left. Their record is kept. */
 export function DeleteEmployeeButton({
   userId,
   name,
   tasks,
   open: openTasks,
-  base,
 }: {
   userId: string;
   name: string;
@@ -31,7 +31,6 @@ export function DeleteEmployeeButton({
   tasks: number;
   /** Tasks not yet passed. */
   open: number;
-  base: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -47,8 +46,9 @@ export function DeleteEmployeeButton({
         return;
       }
       setOpen(false);
-      toast.success(`${res.data.name}'s account was deleted`);
-      router.replace(`${base}/people`);
+      toast.success(`${res.data.name}'s account was deleted`, {
+        description: "Their record is kept and tagged Deleted.",
+      });
       router.refresh();
     });
   }
@@ -70,29 +70,24 @@ export function DeleteEmployeeButton({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Delete {name}&apos;s account?</DialogTitle>
-            <DialogDescription>For someone who has left the company. This can&apos;t be undone.</DialogDescription>
+            <DialogDescription>For someone who has left the company.</DialogDescription>
           </DialogHeader>
           <ul className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground">
             <li>They&apos;re signed out everywhere and can&apos;t sign in again.</li>
+            <li>They come off their team and stop getting notifications.</li>
             <li>
-              {tasks === 0 ? (
-                "They have no tasks, so no work history is lost."
-              ) : (
-                <>
-                  <strong className="text-foreground">
-                    {tasks} task{tasks === 1 ? "" : "s"} and their history
-                  </strong>{" "}
-                  are deleted and drop out of analytics.
-                </>
-              )}
+              <strong className="text-foreground">Their record stays.</strong>{" "}
+              {tasks === 0
+                ? "They have no tasks yet."
+                : `All ${tasks} task${tasks === 1 ? "" : "s"}, reviews and history are kept and still count in analytics.`}{" "}
+              They show with a <DeletedTag className="ml-0" /> tag everywhere.
             </li>
             {openTasks > 0 && (
               <li>
-                <strong className="text-foreground">{openTasks} still open.</strong> To keep that work, reassign it to
-                someone else first.
+                <strong className="text-foreground">{openTasks} still open.</strong> Reassign them to someone else so
+                the work gets done.
               </li>
             )}
-            <li>Subtasks other people did under their tasks are kept.</li>
           </ul>
           <Field>
             <FieldLabel htmlFor="confirm-name">Type their name to confirm</FieldLabel>

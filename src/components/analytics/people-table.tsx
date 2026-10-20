@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { ArrowUpRight, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SunCard } from "./sun-card";
+import { DeletedTag } from "@/components/deleted-tag";
 
 /** One person's overall record, across every team they've worked in. */
 export type PersonRow = {
@@ -12,6 +13,8 @@ export type PersonRow = {
   name: string;
   username: string | null;
   isYou: boolean;
+  /** Their account was deleted (the record is kept). */
+  deleted?: boolean;
   /** Extra text people can search by, e.g. their current team. */
   search: string;
   href?: string;
@@ -101,6 +104,7 @@ export function PeopleTable({ rows }: { rows: PersonRow[] }) {
                       r.name
                     )}
                     {r.isYou && <span className="font-normal text-muted-foreground"> (you)</span>}
+                    {r.deleted && <DeletedTag />}
                   </Td>
                   <Td className="text-right tabular-nums">{r.total}</Td>
                   <Td className="text-right tabular-nums">{r.completed}</Td>

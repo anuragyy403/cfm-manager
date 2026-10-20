@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { APIError } from "better-auth/api";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { nextCookies } from "better-auth/next-js";
 import { username } from "better-auth/plugins";
@@ -22,6 +23,8 @@ export const auth = betterAuth({
     // Link straight to our own page; it checks the token before showing the form.
     // Better Auth deletes the token when it is used, so each link works once.
     sendResetPassword: async ({ user, token }) => {
+      // A deleted account gets no link (the request still looks the same).
+      if (await isDeleted(user.id)) return;
       const url = `${appUrl()}/reset-password?token=${encodeURIComponent(token)}`;
       await sendEmail(
         resetPasswordEmail({
@@ -61,11 +64,30 @@ export const auth = betterAuth({
       },
     },
   },
+  databaseHooks: {
+    session: {
+      create: {
+        // A deleted account can't sign in, with a password or after a reset.
+        async before(session) {
+          if (await isDeleted(session.userId)) {
+            throw new APIError("FORBIDDEN", {
+              message: "This account has been deleted. Ask the owner if you think this is a mistake.",
+            });
+          }
+        },
+      },
+    },
+  },
   plugins: [
     username({ minUsernameLength: 3, maxUsernameLength: 30 }),
     // Must stay last so auth calls from Server Actions can set cookies.
     nextCookies(),
   ],
 });
+
+async function isDeleted(userId: string) {
+  const user = await prisma.user.findUnique({ where: { id: userId }, select: { deletedAt: true } });
+  return !!user?.deletedAt;
+}
 
 export type AuthSession = typeof auth.$Infer.Session;

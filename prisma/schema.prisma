@@ -72,6 +72,9 @@ model User {
   displayUsername String?
   /// Never accepted from sign-up input; only changed by server-side admin tooling.
   role            Role     @default(MEMBER)
+  /// Set when the owner deletes the account. The person can't sign in any
+  /// more, but their tasks and history stay, tagged "Deleted".
+  deletedAt       DateTime?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

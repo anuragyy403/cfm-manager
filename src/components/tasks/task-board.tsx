@@ -7,6 +7,7 @@ import type { TaskListItem } from "@/server/tasks";
 import { PriorityBadge } from "./badges";
 import { DueChip } from "./due-chip";
 import { TaskRelation } from "./task-table";
+import { DeletedTag } from "@/components/deleted-tag";
 
 const COLUMNS: { status: DisplayStatus; label: string; icon: typeof Circle; accent: string; dot: string }[] = [
   { status: "PENDING", label: "Pending", icon: Circle, accent: "border-t-slate-400", dot: "text-slate-500" },
@@ -79,6 +80,7 @@ export function TaskBoard({ tasks, base }: { tasks: TaskListItem[]; base: string
                       <span className="flex min-w-0 items-center gap-1.5">
                         <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
                         <span className="truncate text-xs text-muted-foreground">{t.assignee.name.split(" ")[0]}</span>
+                        {t.assignee.deletedAt && <DeletedTag className="ml-0" />}
                       </span>
                       <DueChip task={t} />
                     </div>

@@ -159,13 +159,25 @@ export type AssigneeOption = {
   /** Open (not completed) tasks already assigned; shown as a workload hint. */
   openTasks: number;
   isManager: boolean;
+  /** Set for HR: their work needs no team (see `hrDeskTeamId`). */
+  isHR?: boolean;
 };
 
 export type TeamOption = { id: string; name: string; people: AssigneeOption[] };
 
+async function openTaskCounts() {
+  const open = await prisma.task.groupBy({
+    by: ["assigneeId"],
+    where: { archivedAt: null, status: { not: "COMPLETED" } },
+    _count: { _all: true },
+  });
+  return new Map(open.map((o) => [o.assigneeId, o._count._all]));
+}
+
 /**
  * Teams in scope with everyone a task can go to: the team's manager (when
- * they are a manager, never the owner) and its employees.
+ * they are a manager, never the owner) and its employees. Never the viewer:
+ * nobody gives work to themselves.
  */
 export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: string): Promise<TeamOption[]> {
   const teams = await prisma.team.findMany({
@@ -181,16 +193,12 @@ export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: stri
       },
     },
   });
-  const open = await prisma.task.groupBy({
-    by: ["assigneeId"],
-    where: { archivedAt: null, status: { not: "COMPLETED" } },
-    _count: { _all: true },
-  });
-  const openBy = new Map(open.map((o) => [o.assigneeId, o._count._all]));
-  const option = (u: { id: string; name: string; username: string | null }, isManager: boolean) => ({
+  const openBy = await openTaskCounts();
+  const option = (u: { id: string; name: string; username: string | null }, isManager: boolean, isHR = false) => ({
     ...u,
     openTasks: openBy.get(u.id) ?? 0,
     isManager,
+    ...(isHR ? { isHR } : {}),
   });
 
   return teams.map((t) => ({
@@ -199,11 +207,44 @@ export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: stri
     people: [
       // The team's head can be given work: a manager, or HR (by the owner only).
       ...(headsTeamAsAssignee(t.manager.role) && (t.manager.role !== "HR" || isOwner(viewer))
-        ? [option(t.manager, true)]
+        ? [option(t.manager, true, t.manager.role === "HR")]
         : []),
       ...t.members.map((m) => option(m.user, false)),
-    ],
+    ].filter((p) => p.id !== viewer.id),
   }));
+}
+
+/**
+ * Everyone in HR, for the owner's "Assign to" list (only the owner gives HR
+ * work). HR isn't on a team, so they are picked directly. Empty for others.
+ */
+export async function listAssignableHR(viewer: CurrentUser): Promise<AssigneeOption[]> {
+  if (!isOwner(viewer)) return [];
+  const [hr, openBy] = await Promise.all([
+    prisma.user.findMany({ where: { role: "HR" }, orderBy: { name: "asc" }, select: { id: true, name: true, username: true } }),
+    openTaskCounts(),
+  ]);
+  return hr.map((u) => ({ ...u, openTasks: openBy.get(u.id) ?? 0, isManager: true, isHR: true }));
+}
+
+/**
+ * Where HR's own work is filed: the team they head (the "HR" team), created
+ * the first time the owner gives them a task. Every task needs a team, but
+ * nobody has to pick one for HR.
+ */
+export async function hrDeskTeamId(hr: { id: string; name: string }) {
+  const team = await prisma.team.findFirst({
+    where: { managerId: hr.id },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (team) return team.id;
+  const taken = await prisma.team.count({ where: { name: { equals: "HR", mode: "insensitive" } } });
+  const created = await prisma.team.create({
+    data: { name: taken ? `HR – ${hr.name}` : "HR", description: "HR's own work, given by the owner.", managerId: hr.id },
+    select: { id: true },
+  });
+  return created.id;
 }
 
 /** Whether someone can be given work in this team (an employee on it, or its manager). */
@@ -247,6 +288,7 @@ export async function searchUsers(
   const users = await prisma.user.findMany({
     where: {
       role: "MEMBER",
+      deletedAt: null,
       OR: [
         { name: { contains: q, mode: "insensitive" } },
         { username: { contains: q.toLowerCase().replace(/^@/, "") } },
@@ -287,9 +329,9 @@ export async function addMember(viewer: CurrentUser, teamId: string, userId: str
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, role: true, memberships: { select: { teamId: true, team: { select: { name: true } } } } },
+    select: { id: true, name: true, role: true, deletedAt: true, memberships: { select: { teamId: true, team: { select: { name: true } } } } },
   });
-  if (!user) throw new DomainError("That account no longer exists.");
+  if (!user || user.deletedAt) throw new DomainError("That account has been deleted.");
   if (user.role !== "MEMBER") throw new DomainError("Only employees can be added to a team.");
 
   const current = user.memberships[0];

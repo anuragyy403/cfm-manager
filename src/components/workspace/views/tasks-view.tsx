@@ -8,7 +8,7 @@ import { TASK_PRIORITIES } from "@/lib/tasks/rules";
 import { seesAllTeams } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { countTasksByView, listTasks, TASK_VIEWS, type TaskView } from "@/server/tasks";
-import { listAssignableTeams } from "@/server/teams";
+import { listAssignableHR, listAssignableTeams } from "@/server/teams";
 import { NewTaskButton } from "../new-task-button";
 import { TaskFilters } from "../task-filters";
 
@@ -38,11 +38,12 @@ export async function TasksView({
   const teamId = one(sp.team)?.slice(0, 64);
   const q = one(sp.q)?.slice(0, 100);
 
-  const [teams, tasks, counts] = await Promise.all([
+  const [teams, tasks, counts, hr] = await Promise.all([
     listAssignableTeams(viewer),
     // The board shows every active task split into status columns.
     listTasks(viewer, { view: layout === "board" ? "all" : view, priority, assigneeId, teamId, q }),
     countTasksByView(viewer, { teamId }),
+    listAssignableHR(viewer),
   ]);
 
   // People to filter by: everyone who can get work in the chosen team(s).
@@ -61,7 +62,7 @@ export async function TasksView({
             ? "Every task in the company: which team, who owns it, its status and its deadline."
             : "Every task in your teams, including work the owner and HR assigned."
         }
-        actions={<NewTaskButton teams={teams} base={base} defaultTeamId={teamId} />}
+        actions={<NewTaskButton teams={teams} hr={hr} base={base} defaultTeamId={teamId} />}
       />
       <div className="space-y-4">
         <TaskFilters members={people} teams={teams} counts={counts} layout={layout} />
@@ -77,7 +78,7 @@ export async function TasksView({
               </p>
               {counts.all === 0 && (
                 <div className="mt-3">
-                  <NewTaskButton teams={teams} base={base} />
+                  <NewTaskButton teams={teams} hr={hr} base={base} />
                 </div>
               )}
             </CardContent>

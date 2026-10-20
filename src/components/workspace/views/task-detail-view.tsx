@@ -23,6 +23,7 @@ import { NewTaskButton } from "../new-task-button";
 import { ReviewActions } from "../review-actions";
 import { TaskManageActions } from "../task-manage-actions";
 import { WorkActions } from "../work-actions";
+import { DeletedTag } from "@/components/deleted-tag";
 
 /**
  * One task as a lead sees it: details, subtasks, history and the actions
@@ -107,7 +108,8 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
               }}
             />
           )}
-          {isOwner(viewer) && (
+          {/* Only whoever assigned a task may delete it, not even the owner otherwise. */}
+          {task.createdBy.id === viewer.id && (
             <DeleteTaskButton taskId={task.id} title={task.title} subtaskCount={task.subtasks.length} base={base} />
           )}
         </div>
@@ -135,7 +137,11 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
       )}
       {!assigneeOnTeam && !task.archivedAt && task.status !== "COMPLETED" && (
         <Alert variant="destructive" className="mb-6">
-          <AlertTitle>The assignee is no longer on {task.team.name}</AlertTitle>
+          <AlertTitle>
+            {task.assignee.deletedAt
+              ? `${task.assignee.name}'s account was deleted`
+              : `The assignee is no longer on ${task.team.name}`}
+          </AlertTitle>
           <AlertDescription>
             {manageable
               ? "Use “Edit / reassign” to give this task to someone on the team."
@@ -227,7 +233,10 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
               <PersonLink href={assigneeHref}>
                 <UserAvatar name={task.assignee.name} id={task.assignee.id} size="md" />
                 <div className="grid leading-tight">
-                  <span className="font-medium">{mine ? `${task.assignee.name} (you)` : task.assignee.name}</span>
+                  <span className="font-medium">
+                    {mine ? `${task.assignee.name} (you)` : task.assignee.name}
+                    {task.assignee.deletedAt && <DeletedTag />}
+                  </span>
                   <span className="text-sm text-muted-foreground">
                     {ROLE_LABELS[task.assignee.role]} · {task.assignee.email}
                   </span>

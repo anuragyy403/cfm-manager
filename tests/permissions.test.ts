@@ -31,7 +31,18 @@ import {
   submitMyTask,
   updateTask,
 } from "@/server/tasks";
-import { addMember, createTeam, deleteTeam, getMyTeam, listTeams, removeMember, searchUsers, setTeamManager } from "@/server/teams";
+import {
+  addMember,
+  createTeam,
+  deleteTeam,
+  getMyTeam,
+  listAssignableHR,
+  listAssignableTeams,
+  listTeams,
+  removeMember,
+  searchUsers,
+  setTeamManager,
+} from "@/server/teams";
 
 type Role = "ADMIN" | "HR" | "MANAGER" | "MEMBER";
 
@@ -147,10 +158,19 @@ describe("the owner sees and controls everything", () => {
 });
 
 describe("a manager is limited to their own teams", () => {
-  it("can assign within their team, to employees or themself", async () => {
+  it("can assign within their team, but never to themself", async () => {
     await createTask(mia, newTask(alice.id, tech));
-    await createTask(mia, newTask(mia.id, tech));
-    expect(await listTasks(mia)).toHaveLength(2);
+    await expect(createTask(mia, newTask(mia.id, tech))).rejects.toThrow(DomainError);
+    expect(await listTasks(mia)).toHaveLength(1);
+  });
+
+  it("can't reassign or split work to themself, and isn't offered as an assignee", async () => {
+    const task = await createTask(mia, newTask(alice.id, tech));
+    await expect(updateTask(mia, task.id, newTask(mia.id, tech))).rejects.toThrow(DomainError);
+    await expect(createTask(mia, { ...newTask(mia.id, tech), parentId: task.id })).rejects.toThrow(DomainError);
+    const people = (await listAssignableTeams(mia)).flatMap((t) => t.people.map((p) => p.id));
+    expect(people).not.toContain(mia.id);
+    expect(people).toContain(alice.id);
   });
 
   it("can't assign in another team or to another team's employee", async () => {
@@ -393,14 +413,14 @@ describe("manager review", () => {
 
   it("a manager's own work goes to the owner for review", async () => {
     const fromOwner = await createTask(owner, newTask(mia.id, tech));
-    const fromHerself = await createTask(mia, newTask(mia.id, tech));
+    const fromHR = await createTask(await makeUser("Hana HR", "HR"), newTask(mia.id, tech));
     await submitMyTask(mia, fromOwner.id, "Portal is ready.");
-    await submitMyTask(mia, fromHerself.id, "Wrote the docs.");
+    await submitMyTask(mia, fromHR.id, "Wrote the docs.");
 
     await expect(reviewTask(mia, fromOwner.id, "PASS", null)).rejects.toThrow(DomainError);
-    await expect(reviewTask(mia, fromHerself.id, "PASS", null)).rejects.toThrow(DomainError);
+    await expect(reviewTask(mia, fromHR.id, "PASS", null)).rejects.toThrow(DomainError);
     expect(await listReviewQueue(mia)).toHaveLength(0);
-    expect((await listReviewQueue(owner)).map((t) => t.id).sort()).toEqual([fromOwner.id, fromHerself.id].sort());
+    expect((await listReviewQueue(owner)).map((t) => t.id).sort()).toEqual([fromOwner.id, fromHR.id].sort());
 
     await reviewTask(owner, fromOwner.id, "FAIL", "Login doesn't work on mobile.");
     expect((await prisma.task.findUniqueOrThrow({ where: { id: fromOwner.id } })).status).toBe("IN_PROGRESS");
@@ -514,32 +534,36 @@ describe("my team and whole-team tasks", () => {
 });
 
 describe("deleting tasks", () => {
-  it("only the owner can delete a task, and its subtasks and history go with it", async () => {
+  it("only whoever assigned a task can delete it, and its subtasks and history go with it", async () => {
     const hr = await makeUser("Hana HR", "HR");
-    const parent = await createTask(owner, newTask(mia.id, tech));
-    const sub = await createTask(mia, { ...newTask(alice.id, tech), parentId: parent.id });
-    await submitMyTask(alice, sub.id, "Done.");
+    const parent = await createTask(mia, newTask(alice.id, tech));
+    const sub = await createTask(mia, { ...newTask(bob.id, tech), parentId: parent.id });
+    await submitMyTask(bob, sub.id, "Done.");
 
-    await expect(deleteTask(mia, parent.id)).rejects.toThrow(DomainError); // the team's manager
-    await expect(deleteTask(hr, parent.id)).rejects.toThrow(DomainError); // HR archives, never deletes
-    await expect(deleteTask(alice, sub.id)).rejects.toThrow(DomainError); // the assignee
+    await expect(deleteTask(owner, parent.id)).rejects.toThrow(DomainError); // not even the owner
+    await expect(deleteTask(hr, parent.id)).rejects.toThrow(DomainError);
+    await expect(deleteTask(alice, parent.id)).rejects.toThrow(DomainError); // the assignee
+    await expect(deleteTask(noah, parent.id)).rejects.toThrow(DomainError); // another manager
     expect(await prisma.task.count({ where: { id: { in: [parent.id, sub.id] } } })).toBe(2);
 
-    await deleteTask(owner, parent.id);
+    await deleteTask(mia, parent.id);
     expect(await prisma.task.count({ where: { id: { in: [parent.id, sub.id] } } })).toBe(0);
     expect(await prisma.taskActivity.count({ where: { taskId: { in: [parent.id, sub.id] } } })).toBe(0);
   });
 
-  it("deleting a subtask leaves the main task", async () => {
-    const parent = await createTask(mia, newTask(mia.id, tech));
+  it("can't take someone else's subtasks with it", async () => {
+    const parent = await createTask(owner, newTask(mia.id, tech));
     const sub = await createTask(mia, { ...newTask(alice.id, tech), parentId: parent.id });
-    expect(await deleteTask(owner, sub.id)).toEqual({ parentId: parent.id });
+    await expect(deleteTask(owner, parent.id)).rejects.toThrow(DomainError);
+    expect(await deleteTask(mia, sub.id)).toEqual({ parentId: parent.id }); // the subtask's assigner
     expect(await prisma.task.count({ where: { id: parent.id } })).toBe(1);
+    await deleteTask(owner, parent.id);
+    expect(await prisma.task.count({ where: { id: parent.id } })).toBe(0);
   });
 });
 
 describe("deleting employees and teams", () => {
-  it("only the owner deletes an employee: account, sign-in and their tasks go; others' subtasks stay", async () => {
+  it("only the owner deletes an employee: they're signed out and off the team, but their record stays", async () => {
     const theirs = await createTask(mia, newTask(alice.id, tech));
     const bobsPart = await createTask(mia, { ...newTask(bob.id, tech), parentId: theirs.id });
     await submitMyTask(alice, theirs.id, "Done.");
@@ -551,20 +575,29 @@ describe("deleting employees and teams", () => {
     await expect(deleteEmployee(owner, mia.id)).rejects.toThrow(DomainError); // not an employee
     await expect(deleteEmployee(owner, owner.id)).rejects.toThrow(DomainError);
 
-    expect(await deleteEmployee(owner, alice.id)).toEqual({ name: alice.name, deletedTasks: 1 });
-    expect(await prisma.user.count({ where: { id: alice.id } })).toBe(0);
+    expect(await deleteEmployee(owner, alice.id)).toEqual({ name: alice.name, keptTasks: 1 });
+    const gone = await prisma.user.findUniqueOrThrow({ where: { id: alice.id } });
+    expect(gone.deletedAt).not.toBeNull();
     expect(await prisma.session.count({ where: { userId: alice.id } })).toBe(0);
-    expect(await prisma.task.count({ where: { id: theirs.id } })).toBe(0);
-    expect(await prisma.taskActivity.count({ where: { taskId: theirs.id } })).toBe(0);
-    const kept = await prisma.task.findUniqueOrThrow({ where: { id: bobsPart.id } });
-    expect(kept.parentId).toBeNull();
+    expect(await prisma.teamMember.count({ where: { userId: alice.id } })).toBe(0);
+    // Everything they did is kept.
+    expect(await prisma.task.count({ where: { id: { in: [theirs.id, bobsPart.id] } } })).toBe(2);
+    expect(await prisma.taskActivity.count({ where: { taskId: theirs.id } })).toBeGreaterThan(0);
+    // Still in the records, tagged as deleted; never offered for new work or teams.
+    const people = (await getTeamAnalytics(owner))!.people;
+    expect(people.find((p) => p.user.id === alice.id)?.deleted).toBe(true);
+    expect((await listAssignableTeams(owner)).flatMap((t) => t.people.map((p) => p.id))).not.toContain(alice.id);
+    expect((await searchUsers(owner, business, "Alice")).map((u) => u.id)).not.toContain(alice.id);
+    await expect(addMember(owner, business, alice.id)).rejects.toThrow(DomainError);
+    await expect(setRole(owner, alice.id, "MANAGER")).rejects.toThrow(DomainError);
+    await expect(deleteEmployee(owner, alice.id)).rejects.toThrow(DomainError); // already deleted
   });
 
-  it("won't delete someone whose actions are part of other people's task history", async () => {
+  it("can delete someone who once acted on others' work, since nothing is erased", async () => {
     const alicesTask = await createTask(mia, newTask(alice.id, tech));
     await prisma.taskActivity.create({ data: { taskId: alicesTask.id, actorId: bob.id, type: "UPDATED" } });
-    await expect(deleteEmployee(owner, bob.id)).rejects.toThrow(DomainError);
-    expect(await prisma.user.count({ where: { id: bob.id } })).toBe(1);
+    await deleteEmployee(owner, bob.id);
+    expect(await prisma.taskActivity.count({ where: { taskId: alicesTask.id, actorId: bob.id } })).toBe(1);
   });
 
   it("only the owner deletes a team; its tasks move to another team first so records stay", async () => {
@@ -614,6 +647,30 @@ describe("HR", () => {
     await expect(createTask(mia, newTask(hr.id, hrTeam))).rejects.toThrow(DomainError);
     const fromOwner = await createTask(owner, newTask(hr.id, hrTeam));
     expect((await listMyTasks(hr)).map((t) => t.id)).toEqual([fromOwner.id]);
+  });
+
+  it("needs no team: the owner picks HR and the work is filed under HR's team", async () => {
+    // With no team given, it goes to the team HR heads.
+    const filed = await createTask(owner, newTask(hr.id, ""));
+    expect(filed.teamId).toBe(hrTeam);
+    // HR who heads no team yet gets one made on the first task.
+    const hr2 = await makeUser("Harry HR", "HR");
+    const first = await createTask(owner, newTask(hr2.id, ""));
+    const second = await createTask(owner, newTask(hr2.id, tech)); // a team picked by mistake is ignored
+    const team = await prisma.team.findUniqueOrThrow({ where: { id: first.teamId } });
+    expect(team.managerId).toBe(hr2.id);
+    expect(second.teamId).toBe(first.teamId);
+    expect((await listAssignableHR(owner)).map((p) => p.id).sort()).toEqual([hr.id, hr2.id].sort());
+    expect(await listAssignableHR(hr)).toEqual([]);
+    // Other teams still need one chosen.
+    await expect(createTask(owner, newTask(alice.id, ""))).rejects.toThrow(DomainError);
+  });
+
+  it("company analytics list everyone, HR included", async () => {
+    const people = (await getTeamAnalytics(owner))!.people.map((p) => p.user.id);
+    expect(people).toEqual(expect.arrayContaining([hr.id, mia.id, noah.id, alice.id, olivia.id]));
+    expect(people).not.toContain(owner.id);
+    expect((await getTeamAnalytics(hr))!.people.map((p) => p.user.id)).toContain(hr.id);
   });
 
   it("can't change teams: those stay with the owner", async () => {

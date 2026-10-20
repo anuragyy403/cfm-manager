@@ -6,7 +6,6 @@ import { type ActionResult, idSchema, roleChangeSchema } from "@/lib/validation"
 import { deleteEmployee, setRole } from "@/server/people";
 import { notifyManagerChanged } from "@/server/push";
 import { requireOwner } from "@/server/session";
-import { deleteTask } from "@/server/tasks";
 import { deleteTeam, setTeamManager } from "@/server/teams";
 import { run } from "./result";
 
@@ -24,19 +23,8 @@ export async function setTeamManagerAction(teamId: unknown, userId: unknown): Pr
   return { ok: true };
 }
 
-/**
- * Permanently deletes a task with its subtasks and history. The page the
- * owner was on no longer exists, so the client navigates away itself.
- */
-export async function deleteTaskAction(taskId: unknown): Promise<ActionResult<{ parentId: string | null }>> {
-  const owner = await requireOwner();
-  const id = idSchema.safeParse(taskId);
-  if (!id.success) return { ok: false, error: "Invalid task." };
-  return run(() => deleteTask(owner, id.data));
-}
-
-/** Deletes an employee's account (someone who has left), with their tasks. */
-export async function deleteEmployeeAction(userId: unknown): Promise<ActionResult<{ name: string; deletedTasks: number }>> {
+/** Deletes an employee's account (someone who has left). Their record stays, tagged "Deleted". */
+export async function deleteEmployeeAction(userId: unknown): Promise<ActionResult<{ name: string; keptTasks: number }>> {
   const owner = await requireOwner();
   const id = idSchema.safeParse(userId);
   if (!id.success) return { ok: false, error: "Invalid person." };

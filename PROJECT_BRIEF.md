@@ -6,7 +6,7 @@ Task tracking and management for a company with three levels: the owner, manager
 
 ## Roles
 - **Owner** (stored as role `ADMIN`, exactly one) — sees and controls everything: every team, manager, employee and task. Creates teams and chooses their managers, promotes employees to managers (and back), assigns work to managers or straight to employees, and sees company-wide analytics. Workspace: `/admin`.
-- **HR** (`HR`, one or more) — works across every team, below the owner and above managers. Sees every team, assigns tasks to managers and employees in any team, edits / reassigns / archives any team's tasks except the owner's, reviews (passes or fails) anyone's work except their own, and sees company-wide analytics. Does not change teams (create, rename, add or remove people, choose managers) or roles: those stay with the owner. Gets work only from the owner, through an "HR team" that HR heads; the owner reviews HR's own work. Only the owner makes someone HR. Workspace: `/hr`.
+- **HR** (`HR`, one or more) — works across every team, below the owner and above managers. Sees every team, assigns tasks to managers and employees in any team, edits / reassigns / archives any team's tasks except the owner's, reviews (passes or fails) anyone's work except their own, and sees company-wide analytics. Does not change teams (create, rename, add or remove people, choose managers) or roles: those stay with the owner. Gets work only from the owner, who picks HR directly (no team to choose); the server files it under an "HR" team that HR heads, created on first use. The owner reviews HR's own work. Only the owner makes someone HR. Workspace: `/hr`.
 - **Manager** (`MANAGER`) — runs one or more teams. Creates their own teams, adds employees, assigns tasks in their teams, splits tasks (including the owner's) into subtasks, works on tasks assigned to them, and sees analytics for their teams only. Workspace: `/manager`.
 - **Employee** (stored as role `MEMBER`) — on at most one team; sees only tasks assigned to them and moves them through the workflow. Workspace: `/dashboard`.
 
@@ -15,7 +15,7 @@ Task tracking and management for a company with three levels: the owner, manager
 2. The owner role is never chosen at sign-up. It is granted with `npm run make-admin -- <email>`, which refuses if an owner already exists. Managers are promoted by the owner inside the app.
 3. Adding someone to a team is direct (no invitation to accept).
 4. Work counts as done only when it is **passed in review**. The assignee submits it for review (with a note on what they delivered); the reviewer passes it (optional feedback) or fails it (feedback required), which sends it back as In progress until it is resubmitted. The reviewer is the team's manager; for a manager's own work (from the owner or themselves) it is the owner. The owner may review anything. A lead can still reopen a passed task with a reason (logged, shown to the assignee as the change to make).
-5. Leads can edit, reassign and archive tasks; every change is logged. Only the owner can delete a task permanently (with its subtasks and history); archiving is the reversible option.
+5. Leads can edit, reassign and archive tasks; every change is logged. Only the person who assigned a task can delete it permanently (with its subtasks and history), not even the owner otherwise; archiving is the reversible option.
 6. A completion note is required. File uploads and comments are deferred to a later phase.
 7. Employees see only their own tasks. Managers see only their own teams.
 8. Many teams (e.g. Tech, Business). Each team has one manager; a manager can run several teams; an employee is on one team.
@@ -26,7 +26,8 @@ Task tracking and management for a company with three levels: the owner, manager
 
 ## Rules that must always hold (enforced on the server)
 - Scopes live in `src/server/access.ts`: the owner sees everything, a manager only teams they manage, an employee only tasks assigned to them.
-- A task can only be assigned to its team's manager or one of its employees — never to the owner, never across teams.
+- A task can only be assigned to its team's manager or one of its employees — never to the owner, never across teams, and never by someone to themselves.
+- New tasks start from the person: the team follows from who they are (asked only when they head several teams). Analytics for the owner and HR list everyone, HR included.
 - A manager can change (edit, reassign, archive, reopen) tasks in their teams, except tasks the owner or HR created; those only the owner (or HR, for HR's tasks) can change. A manager can still split them into subtasks.
 - HR can change any team's tasks except the owner's, but never the teams themselves or anyone's role. Only the owner assigns work to HR.
 - Only the owner changes roles or a team's manager. Nobody can change their own role.
@@ -36,9 +37,9 @@ Task tracking and management for a company with three levels: the owner, manager
 - Nobody can reach another role's pages or data — including via direct Server Action calls.
 - Lifecycle timestamps (assigned, started, submitted, completed) are set by the server only.
 - "Overdue" is derived (deadline passed and not completed), never stored.
-- Task history (`TaskActivity`) is append-only. It is only removed when the owner permanently deletes its task.
-- Only the owner can permanently delete a task (checked on the server); HR and managers can archive.
-- Only the owner can delete an employee account (employees only; leads are changed to employee first). Their tasks and those tasks' history go with it; other people's subtasks under them are kept. Someone whose actions are in other people's task history can't be deleted.
+- Task history (`TaskActivity`) is append-only. It is only removed when its task is permanently deleted.
+- Only whoever assigned a task can permanently delete it (checked on the server), and only when every subtask under it is theirs too. Everyone else can at most archive it.
+- Only the owner can delete an employee account (employees only; leads are changed to employee first). It's a soft delete (`User.deletedAt`): they're signed out, can't sign in or get a reset link, come off their team and are never offered for new work, but every task, review and history entry stays and they show with a "Deleted" tag.
 - Only the owner can delete a team. Its tasks first move to another team the owner chooses, so no one's work record is lost; its employees end up without a team.
 - Removing someone from a team keeps their task history.
 

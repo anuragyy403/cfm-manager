@@ -20,15 +20,16 @@ export type CurrentUser = {
  * Resolves the signed-in user for this request, or null.
  *
  * The role is always re-read from the database rather than trusted from the
- * session payload, so a role change takes effect immediately.
+ * session payload, so a role change (or a deleted account) takes effect immediately.
  * Wrapped in React `cache` so it runs once per request.
  */
 export const getCurrentUser = cache(async (): Promise<CurrentUser | null> => {
   const session = await auth.api.getSession({ headers: await headers() });
   if (!session) return null;
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.user.id },
+  // A deleted account counts as signed out, even with a leftover session.
+  const user = await prisma.user.findFirst({
+    where: { id: session.user.id, deletedAt: null },
     select: {
       id: true,
       name: true,

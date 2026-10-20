@@ -27,6 +27,7 @@ import { DeleteTeamButton } from "../delete-team-button";
 import { MemberActions } from "../member-actions";
 import { NewTaskButton } from "../new-task-button";
 import { ChangeManagerDialog, EditTeamDialog } from "../team-dialogs";
+import { DeletedTag } from "@/components/deleted-tag";
 
 /** One team: its manager, employees and how each of them is doing. */
 export async function TeamDetailView({ viewer, base, teamId }: { viewer: CurrentUser; base: string; teamId: string }) {
@@ -243,7 +244,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {formerMembers.map(({ user, role, metrics }) => (
+                {formerMembers.map(({ user, role, deleted, metrics }) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
                       {seesEveryone || role === "MEMBER" ? (
@@ -253,6 +254,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                       ) : (
                         user.name
                       )}
+                      {deleted && <DeletedTag />}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{metrics.total}</TableCell>
                     <TableCell className="text-right tabular-nums">{metrics.completed}</TableCell>

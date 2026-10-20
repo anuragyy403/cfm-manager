@@ -6,7 +6,7 @@ import { DomainError, isOwner, seesAllTeams, taskReadScope } from "@/server/acce
 import type { CurrentUser } from "@/server/session";
 import { taskListSelect } from "@/server/tasks";
 
-/** Everyone in the company with their role, team and task metrics (owner only). */
+/** Everyone in the company with their role, team and task metrics, deleted accounts included (owner only). */
 export async function listPeople(owner: CurrentUser) {
   if (!isOwner(owner)) throw new DomainError("Only the owner can see everyone.");
   const [users, tasks] = await Promise.all([
@@ -19,6 +19,7 @@ export async function listPeople(owner: CurrentUser) {
         username: true,
         role: true,
         createdAt: true,
+        deletedAt: true,
         memberships: { select: { team: { select: { id: true, name: true } } } },
         managedTeams: { orderBy: { name: "asc" }, select: { id: true, name: true } },
       },
@@ -56,6 +57,7 @@ export async function getPersonOverview(viewer: CurrentUser, userId: string) {
         username: true,
         createdAt: true,
         role: true,
+        deletedAt: true,
         memberships: { select: { joinedAt: true, team: { select: { id: true, name: true, managerId: true } } } },
         managedTeams: { orderBy: { name: "asc" }, select: { id: true, name: true } },
       },
@@ -111,9 +113,10 @@ export async function setRole(owner: CurrentUser, userId: string, role: "HR" | "
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, role: true, managedTeams: { select: { name: true } } },
+    select: { id: true, name: true, role: true, deletedAt: true, managedTeams: { select: { name: true } } },
   });
   if (!user) throw new DomainError("That account no longer exists.");
+  if (user.deletedAt) throw new DomainError(`${user.name}'s account is deleted.`);
   if (user.role === "ADMIN") throw new DomainError("The owner's role can't be changed here.");
   if (user.role === role) return user;
 
@@ -141,43 +144,34 @@ export async function employeeDeletionSummary(owner: CurrentUser, userId: string
 }
 
 /**
- * Owner only: permanently deletes an employee's account, e.g. someone who has
- * left the company. They are signed out everywhere and can't sign in again.
- * Their tasks and those tasks' history go too; it can't be undone. Subtasks
- * other people did under their tasks are kept as standalone tasks.
+ * Owner only: deletes an employee's account, e.g. someone who has left the
+ * company. They are signed out everywhere, can't sign in again and come off
+ * their team, but their record stays: every task, review and history entry is
+ * kept and shown with a "Deleted" tag. Open work can be reassigned by a lead.
  *
- * Only employees: a manager or HR is changed to employee first. Someone who
- * gave out or reviewed work as a lead earlier can't be deleted, since that
- * would remove the history of other people's tasks.
+ * Only employees: a manager or HR is changed to employee first.
  */
 export async function deleteEmployee(owner: CurrentUser, userId: string) {
   if (!isOwner(owner)) throw new DomainError("Only the owner can delete accounts.");
   if (userId === owner.id) throw new DomainError("You can't delete your own account.");
-  const user = await prisma.user.findUnique({ where: { id: userId }, select: { id: true, name: true, role: true } });
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, name: true, role: true, deletedAt: true },
+  });
   if (!user) throw new DomainError("That account no longer exists.");
+  if (user.deletedAt) throw new DomainError(`${user.name}'s account is already deleted.`);
   if (user.role !== "MEMBER") {
     throw new DomainError(`${user.name} isn't an employee. Change their role to employee first, then delete the account.`);
   }
 
-  const [createdForOthers, actedOnOthers] = await Promise.all([
-    prisma.task.count({ where: { createdById: userId, assigneeId: { not: userId } } }),
-    prisma.taskActivity.count({ where: { actorId: userId, task: { assigneeId: { not: userId } } } }),
-  ]);
-  if (createdForOthers > 0 || actedOnOthers > 0) {
-    throw new DomainError(
-      `${user.name} gave out or reviewed other people's work as a lead before, so deleting the account would erase that history.`,
-    );
-  }
-
   return prisma.$transaction(async (tx) => {
-    const own = await tx.task.findMany({ where: { assigneeId: userId }, select: { id: true } });
-    const ids = own.map((t) => t.id);
-    // Other people's subtasks of their tasks stay, as standalone tasks.
-    await tx.task.updateMany({ where: { parentId: { in: ids }, assigneeId: { not: userId } }, data: { parentId: null } });
-    // Their tasks and the history of those tasks.
-    await tx.task.deleteMany({ where: { id: { in: ids } } });
-    // Sessions, sign-in details, team membership and phone notifications go with the account.
-    await tx.user.delete({ where: { id: userId } });
-    return { name: user.name, deletedTasks: ids.length };
+    await tx.user.update({ where: { id: userId }, data: { deletedAt: new Date() } });
+    // Signed out everywhere, off their team and no more phone notifications.
+    // Sign-in stays blocked by `deletedAt` (see src/lib/auth.ts).
+    await tx.session.deleteMany({ where: { userId } });
+    await tx.teamMember.deleteMany({ where: { userId } });
+    await tx.pushSubscription.deleteMany({ where: { userId } });
+    const keptTasks = await tx.task.count({ where: { assigneeId: userId } });
+    return { name: user.name, keptTasks };
   });
 }

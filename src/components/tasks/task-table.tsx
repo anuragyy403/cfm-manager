@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import type { TaskListItem } from "@/server/tasks";
 import { PriorityBadge, StatusBadge } from "./badges";
 import { DueChip } from "./due-chip";
+import { DeletedTag } from "@/components/deleted-tag";
 
 /** Lead task table: every task with who owns it, its team, status and dates. */
 export function TaskTable({
@@ -60,7 +61,10 @@ export function TaskTable({
                 <TableCell>
                   <Link href={`${base}/people/${t.assignee.id}`} className="flex items-center gap-2 hover:underline">
                     <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
-                    <span className="text-sm">{t.assignee.name}</span>
+                    <span className="text-sm">
+                      {t.assignee.name}
+                      {t.assignee.deletedAt && <DeletedTag />}
+                    </span>
                   </Link>
                 </TableCell>
               )}

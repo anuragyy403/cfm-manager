@@ -15,9 +15,9 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
-import { deleteTaskAction } from "@/server/actions/owner";
+import { deleteTaskAction } from "@/server/actions/lead";
 
-/** Owner-only: permanently delete a task, its subtasks and their history. */
+/** For whoever assigned the task: permanently delete it, its subtasks and their history. */
 export function DeleteTaskButton({
   taskId,
   title,

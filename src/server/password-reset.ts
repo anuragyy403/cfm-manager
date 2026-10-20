@@ -37,8 +37,8 @@ export async function sendMemberPasswordReset(viewer: CurrentUser, userId: strin
   if (userId === viewer.id) throw new DomainError("Use Account settings to change your own password.");
   const target = await prisma.user.findFirst({
     where: isOwner(viewer)
-      ? { id: userId }
-      : { id: userId, role: "MEMBER", memberships: { some: { team: teamScope(viewer) } } },
+      ? { id: userId, deletedAt: null }
+      : { id: userId, deletedAt: null, role: "MEMBER", memberships: { some: { team: teamScope(viewer) } } },
     select: { email: true, name: true },
   });
   if (!target) throw new DomainError("That person isn't on your team.");

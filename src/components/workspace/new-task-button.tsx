@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { ListTree, Plus, UserPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TaskFormDialog, type TeamOption } from "./task-form-dialog";
+import { type AssigneeOption, TaskFormDialog, type TeamOption } from "./task-form-dialog";
 
 export function NewTaskButton({
   teams,
@@ -14,8 +14,11 @@ export function NewTaskButton({
   defaultTeamId,
   label,
   variant = "brand",
+  hr,
 }: {
   teams: TeamOption[];
+  /** Everyone in HR (owner only); they need no team. */
+  hr?: AssigneeOption[];
   base: string;
   /** Creates a subtask of this task instead of a new task. */
   parent?: { id: string; title: string; teamId: string };
@@ -28,7 +31,7 @@ export function NewTaskButton({
   // Remount the form each time it opens so it starts empty.
   const [formKey, setFormKey] = useState(0);
 
-  if (!teams.some((t) => t.people.length > 0)) {
+  if (!teams.some((t) => t.people.length > 0) && !hr?.length) {
     return (
       <Button asChild variant="secondary">
         <Link href={`${base}/teams`}>
@@ -60,6 +63,7 @@ export function NewTaskButton({
         parent={parent}
         defaultAssigneeId={defaultAssigneeId}
         defaultTeamId={defaultTeamId}
+        hr={hr}
       />
     </>
   );

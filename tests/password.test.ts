@@ -74,6 +74,19 @@ beforeEach(async () => {
 
 afterAll(wipe);
 
+describe("deleted accounts", () => {
+  it("can't sign in or get a reset link once the owner deletes the account", async () => {
+    const user = await signUp("Kabir");
+    expect(await canSignIn(user.email, OLD)).toBe(true);
+    await prisma.user.update({ where: { id: user.id }, data: { deletedAt: new Date() } });
+
+    expect(await canSignIn(user.email, OLD)).toBe(false);
+    const res = await auth.api.requestPasswordReset({ body: { email: user.email } });
+    expect(res.status).toBe(true); // same answer as for anyone
+    expect(outbox).toHaveLength(0);
+  });
+});
+
 describe("forgot password", () => {
   it("answers the same way for an unknown email and sends nothing", async () => {
     const res = await auth.api.requestPasswordReset({ body: { email: "nobody@test.local" } });

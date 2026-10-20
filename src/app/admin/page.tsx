@@ -29,13 +29,13 @@ import { formatPercent } from "@/lib/format";
 import { listPeople } from "@/server/people";
 import { requireOwner } from "@/server/session";
 import { listActivity, listAttentionTasks, listReviewQueue } from "@/server/tasks";
-import { listAssignableTeams, listManagerCandidates, listTeamsWithMetrics } from "@/server/teams";
+import { listAssignableHR, listAssignableTeams, listManagerCandidates, listTeamsWithMetrics } from "@/server/teams";
 
 export const metadata: Metadata = { title: "Overview" };
 
 export default async function OwnerOverviewPage() {
   const owner = await requireOwner();
-  const [teams, people, attention, activity, assignable, managerCandidates, toReview] = await Promise.all([
+  const [teams, people, attention, activity, assignable, managerCandidates, toReview, hr] = await Promise.all([
     listTeamsWithMetrics(owner),
     listPeople(owner),
     listAttentionTasks(owner, 8),
@@ -43,10 +43,11 @@ export default async function OwnerOverviewPage() {
     listAssignableTeams(owner),
     listManagerCandidates(),
     listReviewQueue(owner),
+    listAssignableHR(owner),
   ]);
 
   const managers = people.filter((p) => p.role === "MANAGER");
-  const employees = people.filter((p) => p.role === "MEMBER");
+  const employees = people.filter((p) => p.role === "MEMBER" && !p.deletedAt);
   // Company-wide numbers are the sum of every team's tasks.
   const m = sumMetrics(teams.map((t) => t.metrics));
   const open = m.pending + m.inProgress + m.overdue;
@@ -97,7 +98,7 @@ export default async function OwnerOverviewPage() {
             {teams.length === 0 ? (
               <NewTeamButton base="/admin" managers={managerCandidates} />
             ) : (
-              <NewTaskButton teams={assignable} base="/admin" />
+              <NewTaskButton teams={assignable} hr={hr} base="/admin" />
             )}
             <Button asChild variant="outline">
               <Link href="/admin/tasks?layout=board">

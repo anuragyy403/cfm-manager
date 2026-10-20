@@ -160,6 +160,18 @@ export async function setTaskArchivedAction(taskId: unknown, archived: unknown):
   return { ok: true };
 }
 
+/**
+ * Permanently deletes a task with its subtasks and history. Only whoever
+ * assigned it may. The page they were on no longer exists, so the client
+ * navigates away itself.
+ */
+export async function deleteTaskAction(taskId: unknown): Promise<ActionResult<{ parentId: string | null }>> {
+  const lead = await requireLead();
+  const id = idSchema.safeParse(taskId);
+  if (!id.success) return { ok: false, error: "Invalid task." };
+  return run(() => tasks.deleteTask(lead, id.data));
+}
+
 /** Pass or fail handed-in work. The assignee is notified either way. */
 export async function reviewTaskAction(taskId: unknown, input: unknown): Promise<ActionResult> {
   const lead = await requireLead();

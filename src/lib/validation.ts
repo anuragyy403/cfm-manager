@@ -17,7 +17,8 @@ export const taskInputSchema = z.object({
   /** ISO timestamp produced by the browser from the local date/time picker. */
   dueAt: z.iso.datetime({ offset: true, error: "Choose a valid deadline." }),
   assigneeId: z.string().min(1, "Choose who this task is assigned to."),
-  teamId: z.string().min(1, "Choose a team.").max(64),
+  /** Empty for work given to HR, which needs no team (the server files it). */
+  teamId: z.string().max(64).default(""),
   /** Set when splitting a bigger task into a subtask. */
   parentId: z.string().min(1).max(64).optional(),
 });

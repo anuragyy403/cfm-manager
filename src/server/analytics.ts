@@ -6,7 +6,7 @@ import { completedOnTime } from "@/lib/tasks/rules";
 import { computeMetrics, type TaskMetrics } from "@/lib/tasks/metrics";
 import type { Role } from "@/generated/prisma/client";
 import type { CurrentUser } from "@/server/session";
-import { taskScope, teamScope } from "@/server/access";
+import { seesAllTeams, taskScope, teamScope } from "@/server/access";
 
 export type MemberPerformance = {
   user: { id: string; name: string; username: string | null; email: string };
@@ -33,6 +33,8 @@ export type TeamPerformance = {
 export type PersonPerformance = {
   user: { id: string; name: string; username: string | null; email: string };
   role: Role;
+  /** The owner deleted their account; the record is kept. */
+  deleted: boolean;
   /** Teams in scope they're on now (as employee or manager); empty if they've left. */
   currentTeams: string[];
   metrics: TaskMetrics;
@@ -134,6 +136,13 @@ export async function getTeamAnalytics(
     if (headsTeamAsAssignee(team.manager.role)) personIds.add(team.manager.id);
     for (const m of team.members) personIds.add(m.user.id);
   }
+  // Company-wide (owner and HR, no team filter): everyone is listed, HR
+  // included, even people who aren't on a team or have no work yet. Deleted
+  // accounts only show when they have work on record (added above).
+  if (seesAllTeams(viewer) && !teamId) {
+    const everyone = await prisma.user.findMany({ where: { role: { not: "ADMIN" }, deletedAt: null }, select: { id: true } });
+    for (const u of everyone) personIds.add(u.id);
+  }
   const currentTeams = new Map<string, string[]>();
   for (const team of teams) {
     for (const id of [team.manager.id, ...team.members.map((m) => m.user.id)]) {
@@ -142,12 +151,13 @@ export async function getTeamAnalytics(
   }
   const users = await prisma.user.findMany({
     where: { id: { in: [...personIds] }, role: { not: "ADMIN" } },
-    select: { id: true, name: true, username: true, email: true, role: true },
+    select: { id: true, name: true, username: true, email: true, role: true, deletedAt: true },
   });
   const people: PersonPerformance[] = users
-    .map(({ role, ...user }) => ({
+    .map(({ role, deletedAt, ...user }) => ({
       user,
       role,
+      deleted: !!deletedAt,
       currentTeams: currentTeams.get(user.id) ?? [],
       metrics: computeMetrics(byAssignee.get(user.id) ?? [], now),
     }))
