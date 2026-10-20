@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { UserAvatar } from "@/components/user-avatar";
 import { formatPercent } from "@/lib/format";
-import { isOwner } from "@/server/access";
+import { canChangeTeams, isHR, isOwner } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { listManagerCandidates, listTeamsWithMetrics } from "@/server/teams";
 import { NewTeamButton } from "../team-dialogs";
@@ -14,6 +14,8 @@ import { NewTeamButton } from "../team-dialogs";
 /** Team cards: who runs each team, headcount and how its work is going. */
 export async function TeamsView({ viewer, base }: { viewer: CurrentUser; base: string }) {
   const owner = isOwner(viewer);
+  const hr = isHR(viewer);
+  const canCreate = canChangeTeams(viewer);
   const [teams, managers] = await Promise.all([
     listTeamsWithMetrics(viewer),
     owner ? listManagerCandidates() : Promise.resolve(undefined),
@@ -26,9 +28,11 @@ export async function TeamsView({ viewer, base }: { viewer: CurrentUser; base: s
         description={
           owner
             ? "Every team in the company, who manages it and how its work is going."
-            : "The teams you manage. Create a team, then add your employees to it."
+            : hr
+              ? "Every team in the company and how its work is going. The owner sets up teams and their people."
+              : "The teams you manage. Create a team, then add your employees to it."
         }
-        actions={<NewTeamButton base={base} managers={managers} />}
+        actions={canCreate ? <NewTeamButton base={base} managers={managers} /> : undefined}
       />
 
       {teams.length === 0 ? (
@@ -41,9 +45,11 @@ export async function TeamsView({ viewer, base }: { viewer: CurrentUser; base: s
                 ? "Create a team such as Tech or Business and choose its manager."
                 : "Create your first team, then add the employees who report to you."}
             </p>
-            <div className="mt-3">
-              <NewTeamButton base={base} managers={managers} />
-            </div>
+            {canCreate && (
+              <div className="mt-3">
+                <NewTeamButton base={base} managers={managers} />
+              </div>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -79,7 +85,7 @@ export async function TeamsView({ viewer, base }: { viewer: CurrentUser; base: s
                         {team.manager.id === viewer.id ? "You" : team.manager.name}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {team.manager.role === "ADMIN" ? "Owner, managing directly" : "Manager"}
+                        {team.manager.role === "ADMIN" ? "Owner, managing directly" : team.manager.role === "HR" ? "HR" : "Manager"}
                       </span>
                     </div>
                     <span className="ml-auto flex items-center gap-1 text-sm text-muted-foreground">

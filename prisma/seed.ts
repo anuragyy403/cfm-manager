@@ -3,6 +3,7 @@
  *
  * Wipes the local database and creates:
  *   - the owner (admin@cfm.test)
+ *   - HR: hina@cfm.test, heading the "HR team" the owner assigns HR's work to
  *   - 2 managers: rahul@cfm.test runs "Tech team", divya@cfm.test runs "Business team"
  *   - 8 employees split across the two teams
  *   - 2 registered employees who are NOT on a team yet (to test search)
@@ -12,7 +13,7 @@
  *     subtasks, so every dashboard has data.
  *
  * Every seeded account uses the password in SEED_PASSWORD below.
- * Sign in as admin@cfm.test (owner), rahul@cfm.test (manager) or
+ * Sign in as admin@cfm.test (owner), hina@cfm.test (HR), rahul@cfm.test (manager) or
  * e.g. aarav@cfm.test (employee).
  *
  * Refuses to run against anything except a local database.
@@ -52,9 +53,11 @@ const now = Date.now();
 const at = (daysFromNow: number, hoursOffset = 0) =>
   new Date(now + daysFromNow * DAY + hoursOffset * HOUR);
 
-type SeedUser = { name: string; username: string; role?: "ADMIN" | "MANAGER" | "MEMBER" };
+type SeedUser = { name: string; username: string; role?: "ADMIN" | "HR" | "MANAGER" | "MEMBER" };
 
 const admin: SeedUser = { name: "CFM Owner", username: "admin", role: "ADMIN" };
+
+const hrPerson: SeedUser = { name: "Hina Kapoor", username: "hina", role: "HR" };
 
 const managers: SeedUser[] = [
   { name: "Rahul Khanna", username: "rahul", role: "MANAGER" },
@@ -305,6 +308,7 @@ async function main() {
 
   console.log("Creating users…");
   const ownerUser = await createUser(admin, passwordHash);
+  const hrUser = await createUser(hrPerson, passwordHash);
   const byUsername = new Map<string, string>();
   for (const m of [...managers, ...members, ...outsiders]) {
     const user = await createUser(m, passwordHash);
@@ -348,8 +352,21 @@ async function main() {
     await createSeedTask(t, { teamId: team.id, assigneeId: id(t.assignee), createdById: ownerUser.id, reviewerId: team.managerId });
   }
 
+  // HR: heads the HR team (the owner gives HR work there) and gives work in any team.
+  const hrTeam = await prisma.team.create({
+    data: { name: "HR team", description: "People, hiring, policies and payroll", managerId: hrUser.id },
+  });
+  await createSeedTask(
+    { title: "Update the leave policy", description: "Add the new work-from-home rules and share it with every team.", assignee: "hina", priority: "HIGH", status: "IN_PROGRESS", assignedDaysAgo: 3, dueInDays: 4, startedDaysAgo: 2 },
+    { teamId: hrTeam.id, assigneeId: hrUser.id, createdById: ownerUser.id, reviewerId: ownerUser.id },
+  );
+  await createSeedTask(
+    { title: "Fill in your annual review form", description: "Self-review for this year: goals met, wins and what you need next year.", assignee: "aarav", priority: "MEDIUM", status: "PENDING", assignedDaysAgo: 1, dueInDays: 6 },
+    { teamId: teams.tech.id, assigneeId: id("aarav"), createdById: hrUser.id, reviewerId: teams.tech.managerId },
+  );
+
   console.log(
-    `Done: 1 owner, ${managers.length} managers, ${members.length} employees, ${outsiders.length} people without a team, ` +
+    `Done: 1 owner, 1 HR, ${managers.length} managers, ${members.length} employees, ${outsiders.length} people without a team, ` +
       `${tasks.length + delegated.length + ownerDirect.length} tasks and ${subtaskCount} subtasks.`,
   );
 }

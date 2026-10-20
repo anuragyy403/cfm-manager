@@ -2,12 +2,14 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { computeMetrics } from "@/lib/tasks/metrics";
-import { DomainError, isOwner, teamScope } from "@/server/access";
+import { headsTeamAsAssignee } from "@/lib/roles";
+import { canChangeTeams, DomainError, isOwner, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 
 /**
- * Team data access. Every function takes an already-verified lead (owner or
- * manager) and only touches teams inside that lead's scope.
+ * Team data access. Every function takes an already-verified lead (owner, HR
+ * or manager) and only touches teams inside that lead's scope. HR can see
+ * every team but not change them (see `canChangeTeams`).
  */
 
 const personSelect = { id: true, name: true, email: true, username: true, image: true, role: true } as const;
@@ -49,16 +51,23 @@ export async function getTeam(viewer: CurrentUser, teamId: string) {
   return team;
 }
 
+const TEAMS_STAY_WITH_OWNER = "HR can see every team but can't change them. Ask the owner.";
+
+/** A team the viewer may change (rename, people, manager). */
 async function requireTeam(viewer: CurrentUser, teamId: string) {
+  if (!canChangeTeams(viewer)) throw new DomainError(TEAMS_STAY_WITH_OWNER);
   const team = await prisma.team.findFirst({ where: { id: teamId, ...teamScope(viewer) } });
   if (!team) throw new DomainError("Team not found.");
   return team;
 }
 
-/** People the owner can put in charge of a team: managers and the owner themself. */
+/**
+ * People the owner can put in charge of a team: managers, HR (for the HR team
+ * the owner assigns HR's own work to) and the owner themself.
+ */
 export async function listManagerCandidates() {
   return prisma.user.findMany({
-    where: { role: { in: ["ADMIN", "MANAGER"] } },
+    where: { role: { in: ["ADMIN", "HR", "MANAGER"] } },
     orderBy: [{ role: "asc" }, { name: "asc" }],
     select: { id: true, name: true, username: true, role: true },
   });
@@ -68,7 +77,7 @@ async function assertCanManageTeams(userId: string) {
   const user = await prisma.user.findUnique({ where: { id: userId }, select: { role: true } });
   if (!user) throw new DomainError("That account no longer exists.");
   if (user.role === "MEMBER") {
-    throw new DomainError("Only a manager can run a team. Promote this person to manager first.");
+    throw new DomainError("Only a manager or HR can run a team. Promote this person first.");
   }
 }
 
@@ -80,6 +89,7 @@ export async function createTeam(
   viewer: CurrentUser,
   input: { name: string; description: string; managerId?: string },
 ) {
+  if (!canChangeTeams(viewer)) throw new DomainError(TEAMS_STAY_WITH_OWNER);
   let managerId = viewer.id;
   if (isOwner(viewer) && input.managerId) {
     await assertCanManageTeams(input.managerId);
@@ -187,7 +197,10 @@ export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: stri
     id: t.id,
     name: t.name,
     people: [
-      ...(t.manager.role === "MANAGER" ? [option(t.manager, true)] : []),
+      // The team's head can be given work: a manager, or HR (by the owner only).
+      ...(headsTeamAsAssignee(t.manager.role) && (t.manager.role !== "HR" || isOwner(viewer))
+        ? [option(t.manager, true)]
+        : []),
       ...t.members.map((m) => option(m.user, false)),
     ],
   }));
@@ -205,7 +218,7 @@ export async function isAssignableInTeam(teamId: string, userId: string) {
   });
   if (!team) return false;
   if (team.members.length > 0) return true;
-  return team.managerId === userId && team.manager.role === "MANAGER";
+  return team.managerId === userId && headsTeamAsAssignee(team.manager.role);
 }
 
 export type UserSearchResult = {

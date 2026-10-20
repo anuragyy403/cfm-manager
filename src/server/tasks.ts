@@ -4,7 +4,7 @@ import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canMemberTransition, DUE_SOON_MS, reviewerIsOwner, submittedOnTime } from "@/lib/tasks/rules";
 import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
-import { canAddSubtask, canManageTask, canReview, DomainError, isOwner, myActionScope, myTeamsWhere, myWorkScope, taskReadScope, taskScope, teamScope } from "@/server/access";
+import { canAddSubtask, canManageTask, canReview, DomainError, isHR, isOwner, myActionScope, myTeamsWhere, myWorkScope, taskReadScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { isAssignableInTeam } from "@/server/teams";
 
@@ -167,14 +167,23 @@ async function findTaskInScope(viewer: CurrentUser, taskId: string) {
 async function findManageableTask(viewer: CurrentUser, taskId: string) {
   const task = await findTaskInScope(viewer, taskId);
   if (!canManageTask(viewer, task)) {
-    throw new DomainError("This task was assigned by the owner, so only the owner can change it.");
+    throw new DomainError(
+      task.createdBy.role === "HR"
+        ? "This task was assigned by HR, so only HR or the owner can change it."
+        : "This task was assigned by the owner, so only the owner can change it.",
+    );
   }
   return task;
 }
 
-async function assertAssignable(teamId: string, assigneeId: string) {
+/** The assignee must be on the team (or head it), and only the owner gives work to HR. */
+async function assertAssignable(viewer: CurrentUser, teamId: string, assigneeId: string) {
   if (!(await isAssignableInTeam(teamId, assigneeId))) {
     throw new DomainError("Tasks can only be assigned to this team's manager or its employees.");
+  }
+  if (!isOwner(viewer)) {
+    const assignee = await prisma.user.findUnique({ where: { id: assigneeId }, select: { role: true } });
+    if (assignee?.role === "HR") throw new DomainError("Only the owner can give work to HR.");
   }
 }
 
@@ -194,7 +203,7 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
           ? "A subtask can't be split further."
           : parent.status === "COMPLETED" || parent.status === "SUBMITTED" || parent.archivedAt
             ? "Subtasks can only be added to open tasks."
-            : "Only the owner or this team's manager can add subtasks.",
+            : "Only the owner, HR or this team's manager can add subtasks.",
       );
     }
     teamId = parent.teamId;
@@ -203,7 +212,7 @@ export async function createTask(viewer: CurrentUser, input: TaskInput) {
     const team = await prisma.team.findFirst({ where: { id: teamId, ...teamScope(viewer) }, select: { id: true } });
     if (!team) throw new DomainError("Choose one of your teams.");
   }
-  await assertAssignable(teamId, input.assigneeId);
+  await assertAssignable(viewer, teamId, input.assigneeId);
 
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
@@ -280,7 +289,7 @@ export async function updateTask(viewer: CurrentUser, taskId: string, input: Tas
     if (existing.status === "COMPLETED") {
       throw new DomainError("Reopen this task before reassigning it.");
     }
-    await assertAssignable(existing.teamId, input.assigneeId);
+    await assertAssignable(viewer, existing.teamId, input.assigneeId);
   }
 
   const dueAt = new Date(input.dueAt);
@@ -372,6 +381,19 @@ export async function setTaskArchived(viewer: CurrentUser, taskId: string, archi
       }
     }
   });
+}
+
+/**
+ * Permanently deletes a task, its subtasks and all their history. Owner only
+ * (not HR), and it can't be undone: archiving is the reversible way to hide a task.
+ */
+export async function deleteTask(viewer: CurrentUser, taskId: string) {
+  if (!isOwner(viewer)) throw new DomainError("Only the owner can delete tasks.");
+  const task = await prisma.task.findUnique({ where: { id: taskId }, select: { id: true, parentId: true } });
+  if (!task) throw new DomainError("Task not found.");
+  // Subtasks and history rows are removed with it (onDelete: Cascade).
+  await prisma.task.delete({ where: { id: task.id } });
+  return { parentId: task.parentId };
 }
 
 export async function reopenTask(viewer: CurrentUser, taskId: string, reason: string) {
@@ -472,9 +494,11 @@ export async function reviewTask(viewer: CurrentUser, taskId: string, decision: 
 }
 
 /**
- * Handed-in work this lead should review, oldest first. A manager reviews
- * their teams' work except their own; the owner reviews the managers' own
- * work (everything else the owner can still find under "In review").
+ * Handed-in work this lead should review, oldest first.
+ * - A manager: their teams' work except their own.
+ * - HR: work HR gave out, and their own team's (HR team) work.
+ * - The owner: the managers' and HR's own work.
+ * Everyone who may review more can still find it under "In review".
  */
 export async function listReviewQueue(viewer: CurrentUser, take = 20) {
   const tasks = await prisma.task.findMany({
@@ -483,6 +507,7 @@ export async function listReviewQueue(viewer: CurrentUser, take = 20) {
       archivedAt: null,
       status: "SUBMITTED",
       ...(isOwner(viewer) ? {} : { assigneeId: { not: viewer.id } }),
+      ...(isHR(viewer) ? { OR: [{ createdById: viewer.id }, { team: { managerId: viewer.id } }] } : {}),
     },
     select: { ...taskListSelect, team: { select: { id: true, name: true, managerId: true } } },
     orderBy: { submittedAt: "asc" },

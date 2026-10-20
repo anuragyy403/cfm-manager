@@ -1,6 +1,7 @@
 import "server-only";
 import { startOfWeek, subWeeks, addWeeks } from "date-fns";
 import { prisma } from "@/lib/prisma";
+import { headsTeamAsAssignee } from "@/lib/roles";
 import { completedOnTime } from "@/lib/tasks/rules";
 import { computeMetrics, type TaskMetrics } from "@/lib/tasks/metrics";
 import type { Role } from "@/generated/prisma/client";
@@ -102,7 +103,7 @@ export async function getTeamAnalytics(
   const members: MemberPerformance[] = [];
   for (const team of teams) {
     const ref = { id: team.id, name: team.name };
-    if (team.manager.role === "MANAGER") {
+    if (headsTeamAsAssignee(team.manager.role)) {
       const { id, name, username, email } = team.manager;
       const user = { id, name, username, email };
       members.push({
@@ -130,7 +131,7 @@ export async function getTeamAnalytics(
   for (const t of tasks) byAssignee.set(t.assigneeId, [...(byAssignee.get(t.assigneeId) ?? []), t]);
   const personIds = new Set(byAssignee.keys());
   for (const team of teams) {
-    if (team.manager.role === "MANAGER") personIds.add(team.manager.id);
+    if (headsTeamAsAssignee(team.manager.role)) personIds.add(team.manager.id);
     for (const m of team.members) personIds.add(m.user.id);
   }
   const currentTeams = new Map<string, string[]>();

@@ -5,7 +5,7 @@ import { TaskBoard } from "@/components/tasks/task-board";
 import { TaskTable } from "@/components/tasks/task-table";
 import { Card, CardContent } from "@/components/ui/card";
 import { TASK_PRIORITIES } from "@/lib/tasks/rules";
-import { isOwner } from "@/server/access";
+import { seesAllTeams } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { countTasksByView, listTasks, TASK_VIEWS, type TaskView } from "@/server/tasks";
 import { listAssignableTeams } from "@/server/teams";
@@ -55,11 +55,11 @@ export async function TasksView({
     <>
       <AutoRefresh />
       <PageHeader
-        title={isOwner(viewer) ? "All tasks" : "Team tasks"}
+        title={seesAllTeams(viewer) ? "All tasks" : "Team tasks"}
         description={
-          isOwner(viewer)
+          seesAllTeams(viewer)
             ? "Every task in the company: which team, who owns it, its status and its deadline."
-            : "Every task in your teams, including work the owner assigned."
+            : "Every task in your teams, including work the owner and HR assigned."
         }
         actions={<NewTaskButton teams={teams} base={base} defaultTeamId={teamId} />}
       />

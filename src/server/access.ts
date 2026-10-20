@@ -6,6 +6,8 @@ import type { CurrentUser } from "@/server/session";
  * Who can see what. Every query for teams, tasks and people is filtered
  * through these scopes:
  *   - the owner sees every team;
+ *   - HR sees every team too, and runs their tasks (but not the teams
+ *     themselves: creating teams, moving people and roles stay with the owner);
  *   - a manager sees only the teams they manage;
  *   - an employee sees no team data, only tasks assigned to them.
  */
@@ -16,17 +18,35 @@ export function isOwner(user: CurrentUser) {
   return user.role === "ADMIN";
 }
 
-/** Teams a lead (owner or manager) can see and run. */
+export function isHR(user: CurrentUser) {
+  return user.role === "HR";
+}
+
+/** The owner and HR work across every team. */
+export function seesAllTeams(user: CurrentUser) {
+  return isOwner(user) || isHR(user);
+}
+
+/** Teams a lead (owner, HR or manager) can see and assign work in. */
 export function teamScope(user: CurrentUser): Prisma.TeamWhereInput {
-  if (isOwner(user)) return {};
+  if (seesAllTeams(user)) return {};
   if (user.role === "MANAGER") return { managerId: user.id };
   // Employees never get team-level access; match nothing.
   return { id: { in: [] } };
 }
 
+/**
+ * Whether someone may change teams themselves: create them, rename them, and
+ * add or remove people. The owner and managers (for their own teams) may; HR
+ * works with every team's tasks but leaves the teams to the owner.
+ */
+export function canChangeTeams(user: CurrentUser) {
+  return isOwner(user) || user.role === "MANAGER";
+}
+
 /** Tasks a lead can see: everything in their teams. */
 export function taskScope(user: CurrentUser): Prisma.TaskWhereInput {
-  if (isOwner(user)) return {};
+  if (seesAllTeams(user)) return {};
   return { team: teamScope(user) };
 }
 
@@ -36,7 +56,7 @@ export function taskScope(user: CurrentUser): Prisma.TaskWhereInput {
  * teams, including work from teams that person was on before.
  */
 export function taskReadScope(user: CurrentUser): Prisma.TaskWhereInput {
-  if (isOwner(user)) return {};
+  if (seesAllTeams(user)) return {};
   if (user.role !== "MANAGER") return { id: { in: [] } };
   return {
     OR: [
@@ -72,33 +92,41 @@ export function myActionScope(user: CurrentUser): Prisma.TaskWhereInput {
 
 /**
  * Whether a lead may edit, reassign, archive or reopen a task.
- * The owner may change anything. A manager may change tasks in their own teams,
- * except tasks the owner created: those stay under the owner's control.
+ * - The owner may change anything.
+ * - HR may change any team's tasks, except ones the owner created.
+ * - A manager may change tasks in their own teams, except ones the owner or
+ *   HR created: those stay under their control.
  */
 export function canManageTask(
   user: CurrentUser,
   task: { team: { managerId: string }; createdBy: { role: string } },
 ) {
   if (isOwner(user)) return true;
-  return user.role === "MANAGER" && task.team.managerId === user.id && task.createdBy.role !== "ADMIN";
+  if (isHR(user)) return task.createdBy.role !== "ADMIN";
+  return (
+    user.role === "MANAGER" &&
+    task.team.managerId === user.id &&
+    task.createdBy.role !== "ADMIN" &&
+    task.createdBy.role !== "HR"
+  );
 }
 
 /**
  * Whether someone may pass or fail handed-in work. The team's manager reviews
- * their team's work, except their own (the owner reviews that). The owner may
- * review anything. Nobody reviews work assigned to themselves.
+ * their team's work, except their own (the owner reviews that). The owner and
+ * HR may review anything. Nobody reviews work assigned to themselves.
  */
 export function canReview(user: CurrentUser, task: { assigneeId: string; team: { managerId: string } }) {
   if (task.assigneeId === user.id) return false;
-  if (isOwner(user)) return true;
+  if (seesAllTeams(user)) return true;
   return user.role === "MANAGER" && task.team.managerId === user.id;
 }
 
-/** Whether a lead may split a task into subtasks (owner, or the team's manager). */
+/** Whether a lead may split a task into subtasks (owner, HR, or the team's manager). */
 export function canAddSubtask(
   user: CurrentUser,
   task: { parentId: string | null; archivedAt: Date | null; status: string; team: { managerId: string } },
 ) {
   if (task.parentId || task.archivedAt || task.status === "COMPLETED" || task.status === "SUBMITTED") return false;
-  return isOwner(user) || (user.role === "MANAGER" && task.team.managerId === user.id);
+  return seesAllTeams(user) || (user.role === "MANAGER" && task.team.managerId === user.id);
 }

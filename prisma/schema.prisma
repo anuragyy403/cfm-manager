@@ -18,8 +18,12 @@ datasource db {
 /// ADMIN is the company owner (exactly one): sees and controls everything.
 /// MANAGER runs one or more teams. MEMBER is an employee on one team.
 enum Role {
+  /// The owner (exactly one).
   ADMIN
+  /// Works across every team: assigns, manages and reviews any team's work.
+  HR
   MANAGER
+  /// An employee.
   MEMBER
 }
 

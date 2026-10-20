@@ -22,6 +22,7 @@ type Person = Awaited<ReturnType<typeof listPeople>>[number];
 /** Owner only: everyone in the company, grouped by role, with promote / demote. */
 export async function PeopleView({ owner, base }: { owner: CurrentUser; base: string }) {
   const people = await listPeople(owner);
+  const hr = people.filter((p) => p.role === "HR");
   const managers = people.filter((p) => p.role === "MANAGER");
   const employees = people.filter((p) => p.role === "MEMBER");
   const unassigned = employees.filter((p) => !p.team).length;
@@ -30,15 +31,22 @@ export async function PeopleView({ owner, base }: { owner: CurrentUser; base: st
     <>
       <PageHeader
         title="People"
-        description={`${managers.length} manager${managers.length === 1 ? "" : "s"} and ${employees.length} employee${
+        description={`${hr.length ? `${hr.length} HR, ` : ""}${managers.length} manager${managers.length === 1 ? "" : "s"} and ${employees.length} employee${
           employees.length === 1 ? "" : "s"
         }${unassigned ? `, ${unassigned} not on a team yet` : ""}. New colleagues appear here once they sign up.`}
       />
       <div className="space-y-6">
         <PeopleTable
+          title="HR"
+          description="HR works across every team: assigns, manages and reviews any team's tasks. Give HR work through the HR team."
+          empty="No one is HR yet. Use “Change role” on a person to make them HR."
+          people={hr}
+          base={base}
+        />
+        <PeopleTable
           title="Managers"
           description="Each manager runs one or more teams and sees only those teams' work."
-          empty="No managers yet. Promote an employee with “Make manager”."
+          empty="No managers yet. Use “Change role” on an employee to make them a manager."
           people={managers}
           base={base}
         />
@@ -93,7 +101,7 @@ function PeopleTable({
             <TableBody>
               {people.map((p) => {
                 const m = p.metrics;
-                const teams = p.role === "MANAGER" ? p.managedTeams : p.team ? [p.team] : [];
+                const teams = p.role === "MANAGER" || p.role === "HR" ? p.managedTeams : p.team ? [p.team] : [];
                 return (
                   <TableRow key={p.id}>
                     <TableCell>
@@ -110,7 +118,7 @@ function PeopleTable({
                     <TableCell>
                       {teams.length === 0 ? (
                         <Badge variant="outline" className="text-muted-foreground">
-                          {p.role === "MANAGER" ? "No team yet" : "Not on a team"}
+                          {p.role === "HR" ? "All teams" : p.role === "MANAGER" ? "No team yet" : "Not on a team"}
                         </Badge>
                       ) : (
                         <div className="flex flex-wrap gap-1">

@@ -18,7 +18,7 @@ import {
 import { UserAvatar } from "@/components/user-avatar";
 import { formatDate, formatPercent } from "@/lib/format";
 import type { TaskMetrics } from "@/lib/tasks/metrics";
-import { isOwner } from "@/server/access";
+import { canChangeTeams, isOwner, seesAllTeams } from "@/server/access";
 import { getTeamAnalytics } from "@/server/analytics";
 import type { CurrentUser } from "@/server/session";
 import { getTeam, listAssignableTeams, listManagerCandidates } from "@/server/teams";
@@ -30,6 +30,9 @@ import { ChangeManagerDialog, EditTeamDialog } from "../team-dialogs";
 /** One team: its manager, employees and how each of them is doing. */
 export async function TeamDetailView({ viewer, base, teamId }: { viewer: CurrentUser; base: string; teamId: string }) {
   const owner = isOwner(viewer);
+  // HR sees every team and its people but doesn't change the team itself.
+  const canEdit = canChangeTeams(viewer);
+  const seesEveryone = seesAllTeams(viewer);
   const team = await getTeam(viewer, teamId);
   const [analytics, assignable, managers] = await Promise.all([
     getTeamAnalytics(viewer, { teamId }),
@@ -57,7 +60,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
         description={team.description ?? `${employees.length} employee${employees.length === 1 ? "" : "s"}`}
         actions={
           <>
-            <EditTeamDialog team={team} base={base} />
+            {canEdit && <EditTeamDialog team={team} base={base} />}
             {owner && (
               <ChangeManagerDialog
                 teamId={team.id}
@@ -66,7 +69,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                 employees={employees.map((e) => ({ id: e.user.id, name: e.user.name }))}
               />
             )}
-            <AddMember teamId={team.id} canMove={owner} />
+            {canEdit && <AddMember teamId={team.id} canMove={owner} />}
             <NewTaskButton teams={assignable} base={base} defaultTeamId={team.id} variant="outline" />
           </>
         }
@@ -101,11 +104,15 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                 {team.manager.id === viewer.id && " (you)"}
               </span>
               <span className="text-sm text-muted-foreground">
-                {team.manager.role === "ADMIN" ? "Owner, managing this team directly" : team.manager.email}
+                {team.manager.role === "ADMIN"
+                  ? "Owner, managing this team directly"
+                  : team.manager.role === "HR"
+                    ? `HR · ${team.manager.email}`
+                    : team.manager.email}
               </span>
             </div>
             {managerRow && <MiniMetrics metrics={managerRow.metrics} />}
-            {owner && team.manager.role === "MANAGER" && (
+            {seesEveryone && team.manager.role !== "ADMIN" && team.manager.id !== viewer.id && (
               <Button asChild variant="ghost" size="sm">
                 <Link href={`${base}/people/${team.manager.id}`}>View profile</Link>
               </Button>
@@ -130,9 +137,11 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
               <p className="max-w-sm text-sm text-muted-foreground">
                 Ask your colleagues to sign up, then use <strong>Add member</strong> to find them by name or username.
               </p>
-              <div className="mt-3">
-                <AddMember teamId={team.id} canMove={owner} />
-              </div>
+              {canEdit && (
+                <div className="mt-3">
+                  <AddMember teamId={team.id} canMove={owner} />
+                </div>
+              )}
             </div>
           ) : (
             <Table>
@@ -183,13 +192,15 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                     </TableCell>
                     <TableCell className="text-right tabular-nums">{formatPercent(metrics.onTimeRate)}</TableCell>
                     <TableCell>
-                      <MemberActions
-                        teamId={team.id}
-                        userId={user.id}
-                        name={user.name}
-                        base={base}
-                        openTasks={metrics.pending + metrics.inProgress + metrics.overdue}
-                      />
+                      {canEdit && (
+                        <MemberActions
+                          teamId={team.id}
+                          userId={user.id}
+                          name={user.name}
+                          base={base}
+                          openTasks={metrics.pending + metrics.inProgress + metrics.overdue}
+                        />
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
@@ -223,7 +234,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                 {formerMembers.map(({ user, role, metrics }) => (
                   <TableRow key={user.id}>
                     <TableCell className="font-medium">
-                      {owner || role === "MEMBER" ? (
+                      {seesEveryone || role === "MEMBER" ? (
                         <Link href={`${base}/people/${user.id}`} className="hover:underline">
                           {user.name}
                         </Link>

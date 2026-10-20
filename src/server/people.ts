@@ -2,7 +2,7 @@ import "server-only";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { computeMetrics } from "@/lib/tasks/metrics";
-import { DomainError, isOwner, taskReadScope } from "@/server/access";
+import { DomainError, isOwner, seesAllTeams, taskReadScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { taskListSelect } from "@/server/tasks";
 
@@ -69,10 +69,12 @@ export async function getPersonOverview(viewer: CurrentUser, userId: string) {
   if (!user) notFound();
 
   const membership = user.memberships[0] ?? null;
-  const onViewersTeam = isOwner(viewer) || membership?.team.managerId === viewer.id;
-  if (!isOwner(viewer) && !onViewersTeam && tasks.length === 0) notFound();
-  // Managers never get to open another lead's profile.
-  if (!isOwner(viewer) && user.role !== "MEMBER") notFound();
+  const everyone = seesAllTeams(viewer);
+  const onViewersTeam = everyone || membership?.team.managerId === viewer.id;
+  if (!everyone && !onViewersTeam && tasks.length === 0) notFound();
+  // Managers never get to open another lead's profile; the owner and HR see everyone but the owner.
+  if (!everyone && user.role !== "MEMBER") notFound();
+  if (user.role === "ADMIN" && !isOwner(viewer)) notFound();
 
   const activities = await prisma.taskActivity.findMany({
     where: { actorId: userId, task: scope },
@@ -98,12 +100,12 @@ export async function getPersonOverview(viewer: CurrentUser, userId: string) {
 }
 
 /**
- * Owner only: promote an employee to manager, or make a manager an employee
- * again. Promoting takes the person off their team's employee list (their
- * tasks and history stay). A manager still running a team must hand it over
- * before becoming an employee.
+ * Owner only: make someone an employee, a manager or HR. Becoming a manager
+ * or HR takes the person off their team's employee list (their tasks and
+ * history stay). Someone still heading a team must hand it over before
+ * becoming an employee.
  */
-export async function setRole(owner: CurrentUser, userId: string, role: "MANAGER" | "MEMBER") {
+export async function setRole(owner: CurrentUser, userId: string, role: "HR" | "MANAGER" | "MEMBER") {
   if (!isOwner(owner)) throw new DomainError("Only the owner can change roles.");
   if (userId === owner.id) throw new DomainError("You can't change your own role.");
 
@@ -117,11 +119,12 @@ export async function setRole(owner: CurrentUser, userId: string, role: "MANAGER
 
   if (role === "MEMBER" && user.managedTeams.length > 0) {
     const names = user.managedTeams.map((t) => t.name).join(", ");
-    throw new DomainError(`${user.name} still runs ${names}. Give the team a new manager first.`);
+    throw new DomainError(`${user.name} still runs ${names}. Give the team a new head first.`);
   }
 
   await prisma.$transaction(async (tx) => {
-    if (role === "MANAGER") await tx.teamMember.deleteMany({ where: { userId } });
+    // Leads (managers and HR) aren't on an employee list.
+    if (role !== "MEMBER") await tx.teamMember.deleteMany({ where: { userId } });
     await tx.user.update({ where: { id: userId }, data: { role } });
   });
   return user;

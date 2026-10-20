@@ -62,7 +62,14 @@ export async function requireManager(): Promise<CurrentUser> {
   return user;
 }
 
-/** Anyone who leads people: the owner or a manager. */
+/** HR only. */
+export async function requireHR(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (user.role !== "HR") redirect(homePathFor(user.role));
+  return user;
+}
+
+/** Anyone who leads people: the owner, HR or a manager. */
 export async function requireLead(): Promise<CurrentUser> {
   const user = await requireUser();
   if (user.role === "MEMBER") redirect(homePathFor(user.role));

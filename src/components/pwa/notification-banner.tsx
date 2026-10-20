@@ -27,12 +27,14 @@ const noSubscribe = () => () => {};
 
 const WHAT_YOU_GET: Record<AppRole, string> = {
   ADMIN: "Get a notification on your phone when a task you assigned is completed.",
+  HR: "Get a notification on your phone when you're given a task or one you assigned is handed in.",
   MANAGER: "Get a notification on your phone when you're given a task or one you assigned is completed.",
   MEMBER: "Get a notification on your phone as soon as you're given a new task.",
 };
 
 const WHAT_YOU_MISS: Record<AppRole, string> = {
   ADMIN: "Notifications are blocked on this device, so you won't hear when tasks are completed.",
+  HR: "Notifications are blocked on this device, so you won't hear about new or handed-in tasks.",
   MANAGER: "Notifications are blocked on this device, so you won't hear about new or completed tasks.",
   MEMBER: "Notifications are blocked on this device, so you won't hear about new tasks.",
 };

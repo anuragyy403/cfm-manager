@@ -14,10 +14,11 @@ import { UserAvatar } from "@/components/user-avatar";
 import { formatDateTime } from "@/lib/format";
 import { ROLE_LABELS } from "@/lib/roles";
 import { changesRequested, reviewerIsOwner } from "@/lib/tasks/rules";
-import { canAddSubtask, canManageTask, canReview, isOwner } from "@/server/access";
+import { canAddSubtask, canManageTask, canReview, isOwner, seesAllTeams } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { getTask, namesForActivities } from "@/server/tasks";
 import { listAssignableTeams } from "@/server/teams";
+import { DeleteTaskButton } from "../delete-task-button";
 import { NewTaskButton } from "../new-task-button";
 import { ReviewActions } from "../review-actions";
 import { TaskManageActions } from "../task-manage-actions";
@@ -49,10 +50,10 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
       : task.team.manager.name;
   const assigneeOnTeam =
     task.team.members.some((m) => m.userId === task.assigneeId) ||
-    (task.team.managerId === task.assigneeId && task.assignee.role === "MANAGER");
-  // Managers can open employee profiles only; the owner can open anyone's.
+    (task.team.managerId === task.assigneeId && (task.assignee.role === "MANAGER" || task.assignee.role === "HR"));
+  // Managers can open employee profiles only; the owner and HR can open anyone's.
   const assigneeHref =
-    isOwner(viewer) || task.assignee.role === "MEMBER" ? `${base}/people/${task.assignee.id}` : undefined;
+    seesAllTeams(viewer) || task.assignee.role === "MEMBER" ? `${base}/people/${task.assignee.id}` : undefined;
 
   const subtasks = task.subtasks.filter((s) => !s.archivedAt);
   const subtasksDone = subtasks.filter((s) => s.status === "COMPLETED").length;
@@ -106,16 +107,19 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
               }}
             />
           )}
+          {isOwner(viewer) && (
+            <DeleteTaskButton taskId={task.id} title={task.title} subtaskCount={task.subtasks.length} base={base} />
+          )}
         </div>
       </div>
 
       {!manageable && !mine && (
         <Alert className="mb-6">
           <Lock />
-          <AlertTitle>Assigned by the owner</AlertTitle>
+          <AlertTitle>Assigned by {task.createdBy.role === "HR" ? "HR" : "the owner"}</AlertTitle>
           <AlertDescription>
-            You can follow this task{splittable ? " and split it into subtasks" : ""}, but only the owner can edit,
-            reassign or archive it.
+            You can follow this task{splittable ? " and split it into subtasks" : ""}, but only{" "}
+            {task.createdBy.role === "HR" ? "HR or the owner" : "the owner"} can edit, reassign or archive it.
           </AlertDescription>
         </Alert>
       )}
@@ -231,7 +235,7 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
               </PersonLink>
               <p className="mt-4 text-xs text-muted-foreground">
                 Assigned by {task.createdBy.id === viewer.id ? "you" : task.createdBy.name}
-                {task.createdBy.role === "ADMIN" && task.createdBy.id !== viewer.id ? " (owner)" : ""}
+                {task.createdBy.id !== viewer.id ? (task.createdBy.role === "ADMIN" ? " (owner)" : task.createdBy.role === "HR" ? " (HR)" : "") : ""}
               </p>
             </CardContent>
           </Card>

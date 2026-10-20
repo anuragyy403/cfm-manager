@@ -36,7 +36,9 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
   const assignable = (await listAssignableTeams(viewer)).filter((t) => t.people.some((p) => p.id === user.id));
   const isSelf = user.id === viewer.id;
   const subtitle =
-    user.role === "MANAGER"
+    user.role === "HR"
+      ? `HR: works across every team${user.managedTeams.length ? ` · heads ${user.managedTeams.map((t) => t.name).join(", ")}` : ""}`
+      : user.role === "MANAGER"
       ? user.managedTeams.length
         ? `Manages ${user.managedTeams.map((t) => t.name).join(", ")}`
         : "Not running a team yet"
@@ -78,7 +80,9 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
               {owner && user.role !== "ADMIN" && (
                 <RoleButton userId={user.id} name={user.name} role={user.role} teamName={team?.name} />
               )}
-              {user.role !== "ADMIN" && <SendResetButton userId={user.id} name={user.name} email={user.email} />}
+              {(owner ? user.role !== "ADMIN" : user.role === "MEMBER") && (
+                <SendResetButton userId={user.id} name={user.name} email={user.email} />
+              )}
               {assignable.length > 0 && (
                 <NewTaskButton
                   teams={assignable}

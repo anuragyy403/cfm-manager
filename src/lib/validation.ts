@@ -30,7 +30,7 @@ export const teamTaskInputSchema = taskInputSchema.omit({ assigneeId: true, pare
 export const taskUpdateSchema = taskInputSchema.omit({ teamId: true, parentId: true });
 export type TaskUpdateInput = z.infer<typeof taskUpdateSchema>;
 
-export const roleChangeSchema = z.enum(["MANAGER", "MEMBER"]);
+export const roleChangeSchema = z.enum(["HR", "MANAGER", "MEMBER"]);
 
 export const completionSchema = z.object({
   note: z

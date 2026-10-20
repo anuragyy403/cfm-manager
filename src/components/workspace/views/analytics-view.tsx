@@ -19,7 +19,7 @@ import { greeting, today } from "@/components/welcome-banner";
 import { formatDate, formatDuration } from "@/lib/format";
 import type { TaskMetrics } from "@/lib/tasks/metrics";
 import { cn } from "@/lib/utils";
-import { isOwner } from "@/server/access";
+import { seesAllTeams } from "@/server/access";
 import { getTeamAnalytics, getWeeklyTrend, type PersonPerformance } from "@/server/analytics";
 import type { CurrentUser } from "@/server/session";
 import { listTeams } from "@/server/teams";
@@ -81,7 +81,7 @@ export async function AnalyticsView({
     return `${base}/tasks${qs ? `?${qs}` : ""}`;
   };
 
-  const owner = isOwner(viewer);
+  const owner = seesAllTeams(viewer);
   const multiTeam = teams.length > 1;
   const scope = teamId
     ? teams.find((x) => x.id === teamId)!.name
@@ -111,10 +111,10 @@ export async function AnalyticsView({
   }
 
   const t = analytics.team;
-  // Managers open employee profiles only; the owner can open anyone's.
+  // Managers open employee profiles only; the owner and HR can open anyone's.
   const personHref = (p: PersonPerformance) =>
     owner || p.role === "MEMBER" ? `${base}/people/${p.user.id}` : undefined;
-  const roleOf = (p: PersonPerformance) => (p.role === "MANAGER" ? "Manager" : "Employee");
+  const roleOf = (p: PersonPerformance) => (p.role === "HR" ? "HR" : p.role === "MANAGER" ? "Manager" : "Employee");
   // Where they are now; their record still counts work from earlier teams.
   const whereNow = (p: PersonPerformance) =>
     p.currentTeams.length ? p.currentTeams.join(", ") : "No longer on these teams";
