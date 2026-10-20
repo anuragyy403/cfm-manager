@@ -231,7 +231,7 @@ export async function TaskDetailView({ viewer, base, id }: { viewer: CurrentUser
             </CardHeader>
             <CardContent>
               <PersonLink href={assigneeHref}>
-                <UserAvatar name={task.assignee.name} id={task.assignee.id} size="md" />
+                <UserAvatar name={task.assignee.name} id={task.assignee.id} image={task.assignee.image} size="md" />
                 <div className="grid leading-tight">
                   <span className="font-medium">
                     {mine ? `${task.assignee.name} (you)` : task.assignee.name}

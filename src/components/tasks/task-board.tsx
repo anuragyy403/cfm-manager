@@ -78,7 +78,7 @@ export function TaskBoard({ tasks, base }: { tasks: TaskListItem[]; base: string
                     )}
                     <div className="flex items-center justify-between gap-2">
                       <span className="flex min-w-0 items-center gap-1.5">
-                        <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
+                        <UserAvatar name={t.assignee.name} id={t.assignee.id} image={t.assignee.image} size="xs" />
                         <span className="truncate text-xs text-muted-foreground">{t.assignee.name.split(" ")[0]}</span>
                         {t.assignee.deletedAt && <DeletedTag className="ml-0" />}
                       </span>

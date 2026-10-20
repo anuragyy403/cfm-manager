@@ -10,7 +10,7 @@ const nav: NavItem[] = [
 export default async function MemberLayout({ children }: LayoutProps<"/dashboard">) {
   const user = await requireEmployee();
   return (
-    <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, role: user.role }}>
+    <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role }}>
       {children}
     </AppShell>
   );

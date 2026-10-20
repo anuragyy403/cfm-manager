@@ -161,6 +161,7 @@ export type AssigneeOption = {
   isManager: boolean;
   /** Set for HR: their work needs no team (see `hrDeskTeamId`). */
   isHR?: boolean;
+  image: string | null;
 };
 
 export type TeamOption = { id: string; name: string; people: AssigneeOption[] };
@@ -186,15 +187,19 @@ export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: stri
     select: {
       id: true,
       name: true,
-      manager: { select: { id: true, name: true, username: true, role: true } },
+      manager: { select: { id: true, name: true, username: true, image: true, role: true } },
       members: {
         orderBy: { user: { name: "asc" } },
-        select: { user: { select: { id: true, name: true, username: true } } },
+        select: { user: { select: { id: true, name: true, username: true, image: true } } },
       },
     },
   });
   const openBy = await openTaskCounts();
-  const option = (u: { id: string; name: string; username: string | null }, isManager: boolean, isHR = false) => ({
+  const option = (
+    u: { id: string; name: string; username: string | null; image: string | null },
+    isManager: boolean,
+    isHR = false,
+  ) => ({
     ...u,
     openTasks: openBy.get(u.id) ?? 0,
     isManager,
@@ -221,7 +226,7 @@ export async function listAssignableTeams(viewer: CurrentUser, onlyTeamId?: stri
 export async function listAssignableHR(viewer: CurrentUser): Promise<AssigneeOption[]> {
   if (!isOwner(viewer)) return [];
   const [hr, openBy] = await Promise.all([
-    prisma.user.findMany({ where: { role: "HR" }, orderBy: { name: "asc" }, select: { id: true, name: true, username: true } }),
+    prisma.user.findMany({ where: { role: "HR" }, orderBy: { name: "asc" }, select: { id: true, name: true, username: true, image: true } }),
     openTaskCounts(),
   ]);
   return hr.map((u) => ({ ...u, openTasks: openBy.get(u.id) ?? 0, isManager: true, isHR: true }));
@@ -371,10 +376,10 @@ export async function getMyTeam(user: CurrentUser) {
           id: true,
           name: true,
           description: true,
-          manager: { select: { id: true, name: true, username: true, role: true } },
+          manager: { select: { id: true, name: true, username: true, image: true, role: true } },
           members: {
             orderBy: { user: { name: "asc" } },
-            select: { joinedAt: true, user: { select: { id: true, name: true, username: true } } },
+            select: { joinedAt: true, user: { select: { id: true, name: true, username: true, image: true } } },
           },
         },
       },

@@ -23,7 +23,7 @@ export type FeedActivity = {
   type: TaskActivityType;
   details: unknown;
   createdAt: Date;
-  actor: { id: string; name: string };
+  actor: { id: string; name: string; image?: string | null };
   task?: { id: string; title: string };
 };
 
@@ -131,7 +131,7 @@ export function ActivityFeed({
         return (
           <li key={a.id} className="relative flex gap-3">
             <div className="relative shrink-0">
-              <UserAvatar name={a.actor.name} id={a.actor.id} className="ring-4 ring-card" />
+              <UserAvatar name={a.actor.name} id={a.actor.id} image={a.actor.image} className="ring-4 ring-card" />
               <span
                 className={cn(
                   "absolute -right-1 -bottom-1 flex size-4 items-center justify-center rounded-full ring-2 ring-card",

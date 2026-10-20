@@ -146,7 +146,7 @@ export async function AnalyticsView({
         subtitle: multiTeam ? `${whereNow(m)} · ${roleOf(m)}` : roleOf(m),
         chips: [`${m.metrics.completed}/${m.metrics.total} done`, `${pct(m.metrics.onTimeRate)} on time`],
         href: personHref(m),
-        person: { id: m.user.id, name: m.user.name },
+        person: { id: m.user.id, name: m.user.name, image: m.user.image },
       })),
     },
     {
@@ -162,7 +162,7 @@ export async function AnalyticsView({
           `${pct(m.metrics.onTimeRate)} on time`,
         ],
         href: personHref(m),
-        person: { id: m.user.id, name: m.user.name },
+        person: { id: m.user.id, name: m.user.name, image: m.user.image },
       })),
     },
   ];
@@ -185,7 +185,7 @@ export async function AnalyticsView({
             ...(x.metrics.overdue ? [`${x.metrics.overdue} overdue`] : []),
           ],
           href: `${base}/teams/${x.id}`,
-          person: { id: x.manager.id, name: x.manager.name },
+          person: { id: x.manager.id, name: x.manager.name, image: x.manager.image },
         })),
     });
   }

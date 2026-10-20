@@ -18,6 +18,7 @@ export async function listPeople(owner: CurrentUser) {
         email: true,
         username: true,
         role: true,
+        image: true,
         createdAt: true,
         deletedAt: true,
         memberships: { select: { team: { select: { id: true, name: true } } } },
@@ -57,6 +58,7 @@ export async function getPersonOverview(viewer: CurrentUser, userId: string) {
         username: true,
         createdAt: true,
         role: true,
+        image: true,
         deletedAt: true,
         memberships: { select: { joinedAt: true, team: { select: { id: true, name: true, managerId: true } } } },
         managedTeams: { orderBy: { name: "asc" }, select: { id: true, name: true } },
@@ -83,7 +85,7 @@ export async function getPersonOverview(viewer: CurrentUser, userId: string) {
     orderBy: { createdAt: "desc" },
     take: 15,
     include: {
-      actor: { select: { id: true, name: true } },
+      actor: { select: { id: true, name: true, image: true } },
       task: { select: { id: true, title: true } },
     },
   });

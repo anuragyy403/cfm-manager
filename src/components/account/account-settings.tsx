@@ -11,14 +11,16 @@ import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/c
 import { Input } from "@/components/ui/input";
 import { PasswordInput } from "@/components/ui/password-input";
 import { PhoneAppCard } from "@/components/pwa/phone-app-card";
+import { PhotoCard } from "./photo-card";
 import { authClient } from "@/lib/auth-client";
 import { changePasswordSchema, profileSchema } from "@/lib/validation";
 
-type AccountUser = { name: string; email: string; username: string | null };
+type AccountUser = { id: string; name: string; email: string; username: string | null; image: string | null };
 
 export function AccountSettings({ user }: { user: AccountUser }) {
   return (
     <div className="grid max-w-2xl gap-6">
+      <PhotoCard user={user} />
       <ProfileCard user={user} />
       <PhoneAppCard />
       <PasswordCard />

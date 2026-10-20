@@ -66,7 +66,7 @@ export type NavItem = {
   exact?: boolean;
 };
 
-type ShellUser = { id: string; name: string; email: string; role: AppRole };
+type ShellUser = { id: string; name: string; email: string; image: string | null; role: AppRole };
 
 function isActive(item: NavItem, pathname: string) {
   return item.exact ? pathname === item.href : pathname === item.href || pathname.startsWith(item.href + "/");
@@ -126,7 +126,7 @@ export function AppShell({
     <DropdownMenuContent side="top" align="start" className="w-60 rounded-2xl">
       <DropdownMenuLabel className="font-normal">
         <div className="flex items-center gap-3">
-          <UserAvatar name={user.name} id={user.id} />
+          <UserAvatar name={user.name} id={user.id} image={user.image} />
           <div className="grid min-w-0 text-sm leading-tight">
             <span className="truncate font-medium">{user.name}</span>
             <span className="truncate text-xs text-muted-foreground">{user.email}</span>
@@ -195,6 +195,7 @@ export function AppShell({
                 <UserAvatar
                   name={user.name}
                   id={user.id}
+                  image={user.image}
                   size="md"
                   className="ring-1 ring-white/20 *:data-[slot=avatar-fallback]:bg-[#26241f] *:data-[slot=avatar-fallback]:text-white"
                 />
@@ -252,7 +253,7 @@ export function AppShell({
             <div className="md:hidden">
               <DropdownMenu>
                 <DropdownMenuTrigger className="rounded-full" aria-label="Account menu">
-                  <UserAvatar name={user.name} id={user.id} size="sm" />
+                  <UserAvatar name={user.name} id={user.id} image={user.image} size="sm" />
                 </DropdownMenuTrigger>
                 {accountMenu}
               </DropdownMenu>

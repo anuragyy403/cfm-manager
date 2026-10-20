@@ -65,6 +65,18 @@ export const auth = betterAuth({
     },
   },
   databaseHooks: {
+    // Photos are only set by our own upload (src/server/photos.ts), never
+    // through Better Auth's sign-up or update-profile calls.
+    user: {
+      create: { before: async (user) => ({ data: { ...user, image: null } }) },
+      update: {
+        before: async (data) => {
+          const rest = { ...data };
+          delete rest.image;
+          return { data: rest };
+        },
+      },
+    },
     session: {
       create: {
         // A deleted account can't sign in, with a password or after a reset.

@@ -9,7 +9,7 @@ import type { CurrentUser } from "@/server/session";
 import { seesAllTeams, taskScope, teamScope } from "@/server/access";
 
 export type MemberPerformance = {
-  user: { id: string; name: string; username: string | null; email: string };
+  user: { id: string; name: string; username: string | null; email: string; image: string | null };
   /** Manager of the team, or an employee on it. */
   isManager: boolean;
   team: { id: string; name: string };
@@ -20,7 +20,7 @@ export type MemberPerformance = {
 export type TeamPerformance = {
   id: string;
   name: string;
-  manager: { id: string; name: string };
+  manager: { id: string; name: string; image: string | null };
   memberCount: number;
   metrics: TaskMetrics;
 };
@@ -31,7 +31,7 @@ export type TeamPerformance = {
  * hides the work they did before.
  */
 export type PersonPerformance = {
-  user: { id: string; name: string; username: string | null; email: string };
+  user: { id: string; name: string; username: string | null; email: string; image: string | null };
   role: Role;
   /** The owner deleted their account; the record is kept. */
   deleted: boolean;
@@ -65,10 +65,10 @@ export async function getTeamAnalytics(
     select: {
       id: true,
       name: true,
-      manager: { select: { id: true, name: true, username: true, email: true, role: true } },
+      manager: { select: { id: true, name: true, username: true, email: true, image: true, role: true } },
       members: {
         orderBy: { user: { name: "asc" } },
-        select: { joinedAt: true, user: { select: { id: true, name: true, username: true, email: true } } },
+        select: { joinedAt: true, user: { select: { id: true, name: true, username: true, email: true, image: true } } },
       },
     },
   });
@@ -106,8 +106,8 @@ export async function getTeamAnalytics(
   for (const team of teams) {
     const ref = { id: team.id, name: team.name };
     if (headsTeamAsAssignee(team.manager.role)) {
-      const { id, name, username, email } = team.manager;
-      const user = { id, name, username, email };
+      const { id, name, username, email, image } = team.manager;
+      const user = { id, name, username, email, image };
       members.push({
         user,
         isManager: true,
@@ -151,7 +151,7 @@ export async function getTeamAnalytics(
   }
   const users = await prisma.user.findMany({
     where: { id: { in: [...personIds] }, role: { not: "ADMIN" } },
-    select: { id: true, name: true, username: true, email: true, role: true, deletedAt: true },
+    select: { id: true, name: true, username: true, email: true, image: true, role: true, deletedAt: true },
   });
   const people: PersonPerformance[] = users
     .map(({ role, deletedAt, ...user }) => ({
@@ -170,7 +170,7 @@ export async function getTeamAnalytics(
     teams: teams.map((t) => ({
       id: t.id,
       name: t.name,
-      manager: { id: t.manager.id, name: t.manager.name },
+      manager: { id: t.manager.id, name: t.manager.name, image: t.manager.image },
       memberCount: t.members.length,
       metrics: computeMetrics(byTeam.get(t.id) ?? [], now),
     })),

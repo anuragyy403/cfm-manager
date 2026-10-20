@@ -110,7 +110,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap items-center gap-4">
-            <UserAvatar name={team.manager.name} id={team.manager.id} size="md" />
+            <UserAvatar name={team.manager.name} id={team.manager.id} image={team.manager.image} size="md" />
             <div className="grid min-w-0 flex-1 leading-tight">
               <span className="font-medium">
                 {team.manager.name}
@@ -175,7 +175,7 @@ export async function TeamDetailView({ viewer, base, teamId }: { viewer: Current
                   <TableRow key={user.id}>
                     <TableCell>
                       <Link href={`${base}/people/${user.id}`} className="flex items-center gap-3 hover:underline">
-                        <UserAvatar name={user.name} id={user.id} />
+                        <UserAvatar name={user.name} id={user.id} image={user.image} />
                         <div className="grid leading-tight">
                           <span className="font-medium">{user.name}</span>
                           <span className="text-xs text-muted-foreground">

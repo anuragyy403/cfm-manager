@@ -33,7 +33,7 @@ export function TaskListItem({
   };
   href: string;
   /** Shown on lead views so the owner or manager sees who owns the task. */
-  assignee?: { id: string; name: string; deletedAt?: Date | null };
+  assignee?: { id: string; name: string; image?: string | null; deletedAt?: Date | null };
   /** Extra detail such as the team, or "Part of …" for a subtask. */
   context?: string;
 }) {
@@ -43,7 +43,7 @@ export function TaskListItem({
       className="group relative flex items-center gap-3 overflow-hidden rounded-xl border bg-card py-3 pr-3 pl-4 transition-all hover:-translate-y-px hover:border-brand-navy/20 hover:shadow-md"
     >
       <span className={cn("absolute inset-y-0 left-0 w-1", priorityBar[task.priority])} aria-hidden />
-      {assignee && <UserAvatar name={assignee.name} id={assignee.id} />}
+      {assignee && <UserAvatar name={assignee.name} id={assignee.id} image={assignee.image} />}
       <div className="min-w-0 flex-1 space-y-1.5">
         <p className="truncate font-medium group-hover:text-brand-navy dark:group-hover:text-white">{task.title}</p>
         <div className="flex flex-wrap items-center gap-1.5">

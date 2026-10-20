@@ -14,7 +14,7 @@ export type HighlightItem = {
   chips: string[];
   href?: string;
   /** Shown bottom-right, like the attendee avatar on the image. */
-  person?: { id: string; name: string };
+  person?: { id: string; name: string; image?: string | null };
 };
 
 export type HighlightTab = { key: string; label: string; empty: string; items: HighlightItem[] };
@@ -93,7 +93,7 @@ function Item({ item, featured }: { item: HighlightItem; featured: boolean }) {
             </span>
           ))}
         </div>
-        {item.person && <UserAvatar name={item.person.name} id={item.person.id} size="xs" className="ring-2 ring-[var(--sun-raised)]" />}
+        {item.person && <UserAvatar name={item.person.name} id={item.person.id} image={item.person.image} size="xs" className="ring-2 ring-[var(--sun-raised)]" />}
       </div>
     </>
   );

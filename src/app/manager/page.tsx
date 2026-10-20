@@ -209,7 +209,7 @@ export default async function ManagerOverviewPage() {
                         href={`/manager/people/${user.id}`}
                         className="flex items-center gap-3 rounded-xl border p-3 transition-all hover:-translate-y-px hover:shadow-md"
                       >
-                        <UserAvatar name={user.name} id={user.id} size="md" />
+                        <UserAvatar name={user.name} id={user.id} image={user.image} size="md" />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center justify-between gap-2">
                             <span className="truncate text-sm font-medium">{user.name}</span>

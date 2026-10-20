@@ -27,6 +27,8 @@ import { DeleteEmployeeButton } from "../delete-employee-button";
 import { NewTaskButton } from "../new-task-button";
 import { RoleButton } from "../role-button";
 import { SendResetButton } from "../send-reset-button";
+import { isOurPhotoUrl } from "@/lib/photos";
+import { RemovePhotoButton } from "../remove-photo-button";
 
 /** Everything about one person: role, team, metrics, tasks and recent activity. */
 export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser; base: string; userId: string }) {
@@ -70,7 +72,7 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
         <div className="pointer-events-none absolute inset-x-0 top-0 h-16 bg-gradient-to-r from-sun-soft via-[#f8e39a] to-sun" />
         <div className="relative flex flex-col gap-4 pt-6 sm:flex-row sm:items-end sm:justify-between">
           <div className="flex items-end gap-4">
-            <UserAvatar name={user.name} id={user.id} size="lg" className="size-20 text-2xl ring-4 ring-card" />
+            <UserAvatar name={user.name} id={user.id} image={user.image} size="lg" className="size-20 text-2xl ring-4 ring-card" />
             <div className="min-w-0 space-y-1 pb-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-semibold tracking-tight">{user.name}</h1>
@@ -84,8 +86,12 @@ export async function PersonView({ viewer, base, userId }: { viewer: CurrentUser
               <p className="text-sm text-muted-foreground">{subtitle}</p>
             </div>
           </div>
+          {owner && !isSelf && user.deletedAt && isOurPhotoUrl(user.image) && (
+            <RemovePhotoButton userId={user.id} name={user.name} />
+          )}
           {!isSelf && !user.deletedAt && (onViewersTeam || owner) && (
             <div className="flex flex-wrap items-center gap-2">
+              {owner && isOurPhotoUrl(user.image) && <RemovePhotoButton userId={user.id} name={user.name} />}
               {owner && user.role !== "ADMIN" && (
                 <RoleButton userId={user.id} name={user.name} role={user.role} teamName={team?.name} />
               )}

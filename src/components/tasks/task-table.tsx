@@ -60,7 +60,7 @@ export function TaskTable({
               {showAssignee && (
                 <TableCell>
                   <Link href={`${base}/people/${t.assignee.id}`} className="flex items-center gap-2 hover:underline">
-                    <UserAvatar name={t.assignee.name} id={t.assignee.id} size="xs" />
+                    <UserAvatar name={t.assignee.name} id={t.assignee.id} image={t.assignee.image} size="xs" />
                     <span className="text-sm">
                       {t.assignee.name}
                       {t.assignee.deletedAt && <DeletedTag />}

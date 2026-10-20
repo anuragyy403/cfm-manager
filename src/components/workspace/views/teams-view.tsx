@@ -79,7 +79,7 @@ export async function TeamsView({ viewer, base }: { viewer: CurrentUser; base: s
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    <UserAvatar name={team.manager.name} id={team.manager.id} />
+                    <UserAvatar name={team.manager.name} id={team.manager.id} image={team.manager.image} />
                     <div className="grid min-w-0 leading-tight">
                       <span className="truncate text-sm font-medium">
                         {team.manager.id === viewer.id ? "You" : team.manager.name}

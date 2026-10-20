@@ -44,7 +44,7 @@ export default async function MyTeamPage() {
             <CardDescription>Assigns and reviews this team&apos;s work.</CardDescription>
           </CardHeader>
           <CardContent className="flex items-center gap-3">
-            <UserAvatar name={team.manager.name} id={team.manager.id} size="md" />
+            <UserAvatar name={team.manager.name} id={team.manager.id} image={team.manager.image} size="md" />
             <div className="min-w-0">
               <p className="flex items-center gap-1.5 truncate font-medium">
                 {team.manager.name}
@@ -68,7 +68,7 @@ export default async function MyTeamPage() {
             <ul className="divide-y">
               {team.members.map(({ user, joinedAt }) => (
                 <li key={user.id} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
-                  <UserAvatar name={user.name} id={user.id} />
+                  <UserAvatar name={user.name} id={user.id} image={user.image} />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{user.name}</p>
                     <p className="truncate text-xs text-muted-foreground">

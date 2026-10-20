@@ -121,7 +121,7 @@ export function AddMember({ teamId, canMove = false }: { teamId: string; canMove
                     onSelect={() => !blocked && add(u)}
                     className="gap-3"
                   >
-                    <UserAvatar name={u.name} id={u.id} />
+                    <UserAvatar name={u.name} id={u.id} image={u.image} />
                     <div className="grid min-w-0 flex-1 leading-tight">
                       <span className="truncate font-medium">{u.name}</span>
                       {u.username && (

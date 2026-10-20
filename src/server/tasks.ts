@@ -31,7 +31,7 @@ export const taskListSelect = {
   reviewNote: true,
   timesFailed: true,
   parentId: true,
-  assignee: { select: { id: true, name: true, username: true, deletedAt: true } },
+  assignee: { select: { id: true, name: true, username: true, image: true, deletedAt: true } },
   team: { select: { id: true, name: true } },
   parent: { select: { id: true, title: true } },
   _count: { select: { subtasks: { where: { archivedAt: null } } } },
@@ -75,7 +75,7 @@ export function viewWhere(view: TaskView, now = new Date()): Prisma.TaskWhereInp
 const activityInclude = {
   activities: {
     orderBy: { createdAt: "desc" },
-    include: { actor: { select: { id: true, name: true } } },
+    include: { actor: { select: { id: true, name: true, image: true } } },
   },
 } satisfies Prisma.TaskInclude;
 
@@ -122,7 +122,7 @@ export async function countTasksByView(viewer: CurrentUser, filters: { teamId?: 
 }
 
 const taskDetailInclude = {
-  assignee: { select: { id: true, name: true, username: true, email: true, role: true, deletedAt: true } },
+  assignee: { select: { id: true, name: true, username: true, email: true, image: true, role: true, deletedAt: true } },
   createdBy: { select: { id: true, name: true, role: true } },
   team: {
     select: {
@@ -574,7 +574,7 @@ export async function listActivity(viewer: CurrentUser, take = 12) {
     orderBy: { createdAt: "desc" },
     take,
     include: {
-      actor: { select: { id: true, name: true } },
+      actor: { select: { id: true, name: true, image: true } },
       task: { select: { id: true, title: true } },
     },
   });

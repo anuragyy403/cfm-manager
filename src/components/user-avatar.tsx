@@ -1,5 +1,6 @@
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { initials } from "@/lib/format";
+import { isOurPhotoUrl } from "@/lib/photos";
 import { cn } from "@/lib/utils";
 
 // Soft background + strong text pairs; each person always gets the same one.
@@ -32,8 +33,11 @@ export function UserAvatar({
   id,
   size = "sm",
   className,
+  image,
 }: {
   name: string;
+  /** Their profile photo; initials show when there's none (or it fails to load). */
+  image?: string | null;
   /** Stable seed for the colour (user id); falls back to the name. */
   id?: string;
   size?: keyof typeof SIZES;
@@ -41,6 +45,7 @@ export function UserAvatar({
 }) {
   return (
     <Avatar className={cn(SIZES[size], className)}>
+      {isOurPhotoUrl(image) && <AvatarImage src={image} alt={name} />}
       <AvatarFallback className={cn("font-semibold", colorFor(id ?? name))}>{initials(name)}</AvatarFallback>
     </Avatar>
   );

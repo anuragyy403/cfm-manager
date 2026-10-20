@@ -255,7 +255,7 @@ export default async function OwnerOverviewPage() {
                         href={`/admin/people/${p.id}`}
                         className="flex items-center gap-3 rounded-xl border bg-card p-3 transition-all hover:-translate-y-px hover:shadow-md"
                       >
-                        <UserAvatar name={p.name} id={p.id} size="md" />
+                        <UserAvatar name={p.name} id={p.id} image={p.image} size="md" />
                         <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
                           <span className="truncate font-medium">{p.name}</span>
                           <span className="truncate text-xs text-muted-foreground">

@@ -111,7 +111,7 @@ function PeopleTable({
                   <TableRow key={p.id}>
                     <TableCell>
                       <Link href={`${base}/people/${p.id}`} className="flex items-center gap-3 hover:underline">
-                        <UserAvatar name={p.name} id={p.id} />
+                        <UserAvatar name={p.name} id={p.id} image={p.image} />
                         <div className="grid leading-tight">
                           <span className="font-medium">
                             {p.name}

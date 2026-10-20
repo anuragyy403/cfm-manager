@@ -40,6 +40,7 @@ export type AssigneeOption = {
   isManager?: boolean;
   /** HR's work needs no team; the server files it under HR. */
   isHR?: boolean;
+  image?: string | null;
 };
 
 export type TeamOption = { id: string; name: string; people: AssigneeOption[] };
@@ -415,7 +416,7 @@ function PeopleGroup({
         return (
           <SelectItem key={m.id} value={m.id}>
             <span className="flex w-full min-w-0 items-center gap-2">
-              <UserAvatar name={m.name} id={m.id} size="xs" />
+              <UserAvatar name={m.name} id={m.id} image={m.image} size="xs" />
               <span className="truncate">{m.name}</span>
               {note && <span className="truncate text-xs text-muted-foreground">{note}</span>}
               {m.openTasks !== undefined && (

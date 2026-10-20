@@ -34,7 +34,7 @@ export function TeamGlanceCard({ team: t, viewerId, base }: { team: GlanceTeam; 
         <div className="grid min-w-0 flex-1 gap-0.5 leading-tight">
           <span className="truncate font-semibold">{t.name}</span>
           <span className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-            <UserAvatar name={t.manager.name} id={t.manager.id} size="xs" />
+            <UserAvatar name={t.manager.name} id={t.manager.id} image={t.manager.image} size="xs" />
             <span className="truncate">{t.manager.id === viewerId ? "Managed by you" : t.manager.name}</span>
             <span aria-hidden>·</span>
             <span className="shrink-0">

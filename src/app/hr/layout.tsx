@@ -13,7 +13,7 @@ const nav: NavItem[] = [
 export default async function HRLayout({ children }: LayoutProps<"/hr">) {
   const user = await requireHR();
   return (
-    <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, role: user.role }}>
+    <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role }}>
       {children}
     </AppShell>
   );
