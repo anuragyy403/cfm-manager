@@ -368,3 +368,47 @@ export function notifyManagerChanged(teamId: string, actor: CurrentUser) {
     ]);
   });
 }
+
+// ─── Private conversations with the owner ──────────────────────────────────
+
+export type ConversationEvent = "case" | "message" | "report" | "resolved" | "reopened";
+
+/**
+ * Tells the other side of a private conversation that something happened:
+ * the owner hears from whoever raised a case (or from HR), and they hear back
+ * from the owner. Never includes what was written, so nothing private shows
+ * on a locked phone screen.
+ */
+export function notifyConversation(conversationId: string, actor: CurrentUser, event: ConversationEvent) {
+  return safely("conversation notice", async () => {
+    const convo = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { id: true, kind: true, creator: { select: { id: true, role: true } } },
+    });
+    if (!convo) return;
+    const fromOwner = actor.role === "ADMIN";
+    const owner = fromOwner ? null : await prisma.user.findFirst({ where: { role: "ADMIN", deletedAt: null }, select: { id: true } });
+    const to = fromOwner ? convo.creator : owner ? { id: owner.id, role: "ADMIN" as const } : null;
+    if (!to || to.id === actor.id) return;
+
+    const isCase = convo.kind === "OWNER_CASE";
+    const title = {
+      case: `${actor.name} raised a private concern`,
+      message: fromOwner ? "The owner replied to you" : `New message from ${actor.name}`,
+      report: `New meeting report from ${actor.name}`,
+      resolved: "The owner marked your concern resolved",
+      reopened: "The owner reopened your concern",
+    }[event];
+    const url = fromOwner
+      ? isCase
+        ? `${HOME_PATHS[to.role]}/talk/${convo.id}`
+        : "/hr/reports"
+      : `/admin/inbox/${convo.id}`;
+    await sendPushToUser(to.id, {
+      title,
+      body: "Open CFM Workplace to read it. Only you two can see it.",
+      url,
+      tag: `conversation-${convo.id}`,
+    });
+  });
+}

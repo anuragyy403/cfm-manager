@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { CirclePlay, Loader2, SendHorizontal } from "lucide-react";
 import { toast } from "sonner";
+import { AttachmentPicker } from "@/components/attachments/attachment-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,6 +38,7 @@ export function WorkActions({
   const [pending, startTransition] = useTransition();
   const [submitOpen, setSubmitOpen] = useState(false);
   const [noteError, setNoteError] = useState<string>();
+  const [files, setFiles] = useState({ ids: [] as string[], busy: false });
 
   if (status === "COMPLETED" || status === "SUBMITTED") return null;
 
@@ -52,7 +54,7 @@ export function WorkActions({
     e.preventDefault();
     const note = new FormData(e.currentTarget).get("note");
     startTransition(async () => {
-      const res = await submitTaskAction(taskId, { note });
+      const res = await submitTaskAction(taskId, { note, attachmentIds: files.ids });
       if (!res.ok) {
         setNoteError(res.fieldErrors?.note ?? res.error);
         return;
@@ -107,14 +109,18 @@ export function WorkActions({
                 <FieldDescription>Required. {capitalise(reviewer)} reads this while reviewing.</FieldDescription>
               )}
             </Field>
+            <Field className="mt-4">
+              <FieldLabel>Photos or videos (optional)</FieldLabel>
+              <AttachmentPicker onChange={setFiles} disabled={pending} hint="Screenshots, photos or a short video of the work." />
+            </Field>
           </form>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSubmitOpen(false)} disabled={pending}>
               Cancel
             </Button>
-            <Button type="submit" form="submit-form" disabled={pending} variant="brand">
-              {pending && <Loader2 className="animate-spin" />}
-              Submit for review
+            <Button type="submit" form="submit-form" disabled={pending || files.busy} variant="brand">
+              {(pending || files.busy) && <Loader2 className="animate-spin" />}
+              {files.busy ? "Uploading…" : "Submit for review"}
             </Button>
           </DialogFooter>
         </DialogContent>

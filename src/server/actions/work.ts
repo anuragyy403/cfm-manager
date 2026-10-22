@@ -33,7 +33,7 @@ export async function submitTaskAction(taskId: unknown, input: unknown): Promise
   if (!parsed.success) {
     return { ok: false, error: "Check the highlighted fields.", fieldErrors: fieldErrorsOf(parsed.error) };
   }
-  const res = await run(() => submitMyTask(user, id.data, parsed.data.note));
+  const res = await run(() => submitMyTask(user, id.data, parsed.data.note, parsed.data.attachmentIds));
   if (!res.ok) return res;
   after(() => notifyTaskSubmitted(id.data, user));
   refresh();

@@ -122,6 +122,20 @@ export function canReview(user: CurrentUser, task: { assigneeId: string; team: {
   return user.role === "MANAGER" && task.team.managerId === user.id;
 }
 
+/**
+ * Private conversations with the owner (cases and HR's desk): only the person
+ * who started it and the owner. Nobody else, ever: not HR, not managers, and
+ * never the person a case is about.
+ */
+export function canSeeConversation(user: CurrentUser, convo: { creatorId: string }) {
+  return isOwner(user) || convo.creatorId === user.id;
+}
+
+/** Prisma filter for the conversations someone can see (spread it; the owner's is `{}`). */
+export function conversationScope(user: CurrentUser): Prisma.ConversationWhereInput {
+  return isOwner(user) ? {} : { creatorId: user.id };
+}
+
 /** Whether a lead may split a task into subtasks (owner, HR, or the team's manager). */
 export function canAddSubtask(
   user: CurrentUser,

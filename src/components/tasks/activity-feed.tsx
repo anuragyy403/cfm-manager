@@ -14,7 +14,9 @@ import {
   UserRoundPen,
 } from "lucide-react";
 import type { TaskActivityType } from "@/generated/prisma/client";
+import { AttachmentGallery } from "@/components/attachments/attachment-gallery";
 import { UserAvatar } from "@/components/user-avatar";
+import type { AttachmentView } from "@/lib/attachments";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -25,6 +27,8 @@ export type FeedActivity = {
   createdAt: Date;
   actor: { id: string; name: string; image?: string | null };
   task?: { id: string; title: string };
+  /** Photos and videos sent with a submission or review. */
+  attachments?: AttachmentView[];
 };
 
 const icons: Record<TaskActivityType, typeof Pencil> = {
@@ -157,6 +161,9 @@ export function ActivityFeed({
                 )}
               </p>
               {reason && <p className="mt-1 rounded-md bg-muted/60 px-2 py-1 text-muted-foreground">“{reason}”</p>}
+              {a.attachments && a.attachments.length > 0 && (
+                <AttachmentGallery attachments={a.attachments} size="sm" className="mt-1.5" />
+              )}
               <p className="text-xs text-muted-foreground" title={formatDateTime(a.createdAt)}>
                 {formatRelative(a.createdAt)}
               </p>

@@ -55,6 +55,40 @@ export function formatDate(date: Date | string) {
   return (sameYear(d) ? dateFmt : dateYearFmt).format(d);
 }
 
+const timeFmt = new Intl.DateTimeFormat("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: APP_TIMEZONE });
+const dayKeyFmt = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit", timeZone: APP_TIMEZONE });
+const weekdayFmt = new Intl.DateTimeFormat("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: APP_TIMEZONE });
+const calendarDayFmt = new Intl.DateTimeFormat("en-GB", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+  timeZone: "UTC",
+});
+
+/** "14:30". */
+export function formatTime(date: Date | string) {
+  return timeFmt.format(new Date(date));
+}
+
+/** "2026-10-22" in the company's timezone, for grouping by day. */
+export function dayKey(date: Date | string) {
+  return dayKeyFmt.format(new Date(date));
+}
+
+/** "Today", "Yesterday" or "Wednesday 22 October", for a divider in a conversation. */
+export function formatDayDivider(date: Date | string) {
+  const key = dayKey(date);
+  if (key === dayKey(new Date())) return "Today";
+  if (key === dayKey(new Date(Date.now() - 86_400_000))) return "Yesterday";
+  return weekdayFmt.format(new Date(date));
+}
+
+/** A calendar date stored without a time (e.g. a meeting date): "Wed, 22 Oct 2026". */
+export function formatCalendarDate(date: Date | string) {
+  return calendarDayFmt.format(new Date(date));
+}
+
 /** "in 3 days" / "2 hours ago". */
 export function formatRelative(date: Date | string) {
   return formatDistanceToNowStrict(new Date(date), { addSuffix: true });

@@ -179,8 +179,8 @@ export async function reviewTaskAction(taskId: unknown, input: unknown): Promise
   const parsed = reviewSchema.safeParse(input);
   if (!id.success) return { ok: false, error: "Invalid task." };
   if (!parsed.success) return { ok: false, error: INVALID_FIELDS, fieldErrors: fieldErrorsOf(parsed.error) };
-  const { decision, note } = parsed.data;
-  const res = await run(() => tasks.reviewTask(lead, id.data, decision, note));
+  const { decision, note, attachmentIds } = parsed.data;
+  const res = await run(() => tasks.reviewTask(lead, id.data, decision, note, attachmentIds));
   if (!res.ok) return res;
   after(() => notifyTaskReviewed(id.data, lead, decision));
   refresh();

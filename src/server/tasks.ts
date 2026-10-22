@@ -4,6 +4,7 @@ import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { prisma } from "@/lib/prisma";
 import { canMemberTransition, DUE_SOON_MS, reviewerIsOwner, submittedOnTime } from "@/lib/tasks/rules";
 import type { TaskInput, TaskUpdateInput } from "@/lib/validation";
+import { attachmentViewSelect, claimDrafts, deleteStoredFiles } from "@/server/attachments";
 import { canAddSubtask, canManageTask, canReview, DomainError, isHR, isOwner, myActionScope, myTeamsWhere, myWorkScope, taskReadScope, taskScope, teamScope } from "@/server/access";
 import type { CurrentUser } from "@/server/session";
 import { hrDeskTeamId, isAssignableInTeam } from "@/server/teams";
@@ -75,7 +76,10 @@ export function viewWhere(view: TaskView, now = new Date()): Prisma.TaskWhereInp
 const activityInclude = {
   activities: {
     orderBy: { createdAt: "desc" },
-    include: { actor: { select: { id: true, name: true, image: true } } },
+    include: {
+      actor: { select: { id: true, name: true, image: true } },
+      attachments: { select: attachmentViewSelect, orderBy: { createdAt: "asc" } },
+    },
   },
 } satisfies Prisma.TaskInclude;
 
@@ -427,8 +431,13 @@ export async function deleteTask(viewer: CurrentUser, taskId: string) {
       `${others} subtask${others === 1 ? " under it was" : "s under it were"} assigned by someone else. Only they can delete ${others === 1 ? "it" : "those"}, so this task can't be deleted yet. Archive it instead.`,
     );
   }
-  // Subtasks and history rows are removed with it (onDelete: Cascade).
+  const files = await prisma.attachment.findMany({
+    where: { activity: { task: { OR: [{ id: task.id }, { parentId: task.id }] } } },
+    select: { pathname: true },
+  });
+  // Subtasks, history rows and their attachments are removed with it (onDelete: Cascade).
   await prisma.task.delete({ where: { id: task.id } });
+  await deleteStoredFiles(files.map((f) => f.pathname));
   return { parentId: task.parentId };
 }
 
@@ -470,7 +479,13 @@ export type ReviewDecision = "PASS" | "FAIL";
  * The reviewer's verdict on handed-in work. Pass: the task is completed and
  * counts as done. Fail: it goes back to the assignee with the feedback.
  */
-export async function reviewTask(viewer: CurrentUser, taskId: string, decision: ReviewDecision, note: string | null) {
+export async function reviewTask(
+  viewer: CurrentUser,
+  taskId: string,
+  decision: ReviewDecision,
+  note: string | null,
+  attachmentIds: string[] = [],
+) {
   const task = await prisma.task.findFirst({
     where: { id: taskId, ...taskScope(viewer) },
     select: {
@@ -511,7 +526,7 @@ export async function reviewTask(viewer: CurrentUser, taskId: string, decision: 
   await prisma.$transaction(async (tx) => {
     const { count } = await tx.task.updateMany({ where: { id: task.id, status: "SUBMITTED" }, data });
     if (count === 0) throw new DomainError("This task changed in the meantime. Refresh and try again.");
-    await tx.taskActivity.create({
+    const activity = await tx.taskActivity.create({
       data: {
         taskId: task.id,
         actorId: viewer.id,
@@ -525,7 +540,9 @@ export async function reviewTask(viewer: CurrentUser, taskId: string, decision: 
             : {}),
         },
       },
+      select: { id: true },
     });
+    await claimDrafts(tx, viewer, attachmentIds, { activityId: activity.id });
   });
 }
 
@@ -628,6 +645,7 @@ async function transitionMyTask(
   taskId: string,
   to: "IN_PROGRESS" | "SUBMITTED",
   note?: string,
+  attachmentIds: string[] = [],
 ) {
   const task = await prisma.task.findFirst({
     where: { id: taskId, ...myActionScope(user) },
@@ -665,7 +683,7 @@ async function transitionMyTask(
     if (count === 0) {
       throw new DomainError("This task changed in the meantime. Refresh and try again.");
     }
-    await tx.taskActivity.create({
+    const activity = await tx.taskActivity.create({
       data: {
         taskId: task.id,
         actorId: user.id,
@@ -677,7 +695,9 @@ async function transitionMyTask(
             ? { onTime: submittedOnTime({ submittedAt: now, dueAt: task.dueAt }) }
             : undefined,
       },
+      select: { id: true },
     });
+    if (to === "SUBMITTED") await claimDrafts(tx, user, attachmentIds, { activityId: activity.id });
   });
 }
 
@@ -685,7 +705,7 @@ export function startMyTask(user: CurrentUser, taskId: string) {
   return transitionMyTask(user, taskId, "IN_PROGRESS");
 }
 
-/** Hands the work in for review. It only counts as done once the reviewer passes it. */
-export function submitMyTask(user: CurrentUser, taskId: string, note: string) {
-  return transitionMyTask(user, taskId, "SUBMITTED", note);
+/** Hands the work in for review, with any photos or videos. It only counts as done once the reviewer passes it. */
+export function submitMyTask(user: CurrentUser, taskId: string, note: string, attachmentIds: string[] = []) {
+  return transitionMyTask(user, taskId, "SUBMITTED", note, attachmentIds);
 }

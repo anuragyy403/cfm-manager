@@ -8,10 +8,13 @@ import {
   ChevronDown,
   ChevronRight,
   ClipboardList,
+  Inbox,
   LayoutDashboard,
   ListChecks,
   LogOut,
   Mail,
+  MessagesSquare,
+  NotebookPen,
   Phone,
   Search,
   UserCog,
@@ -54,6 +57,9 @@ const icons = {
   people: UsersRound,
   analytics: BarChart3,
   account: UserCog,
+  talk: MessagesSquare,
+  inbox: Inbox,
+  reports: NotebookPen,
 };
 
 export type NavItem = {
@@ -64,6 +70,10 @@ export type NavItem = {
   icon: keyof typeof icons;
   /** Match only the exact path (for index routes like /admin). */
   exact?: boolean;
+  /** Unread count shown on the tile and the phone bar. */
+  badge?: number;
+  /** Leave it off the phone bottom bar (which fits six). */
+  hideOnPhone?: boolean;
 };
 
 type ShellUser = { id: string; name: string; email: string; image: string | null; role: AppRole };
@@ -322,9 +332,12 @@ function NavTiles({ tiles, pathname }: { tiles: NavItem[]; pathname: string }) {
                 : "border-white/[0.07] bg-white/[0.07] text-white/85 shadow-[inset_0_1px_0_rgb(255_255_255/0.05)] hover:-translate-y-px hover:bg-white/[0.11] hover:text-white",
             )}
           >
-            <Icon className="size-5" strokeWidth={1.75} />
+            <span className="relative">
+              <Icon className="size-5" strokeWidth={1.75} />
+              <NavBadge count={item.badge} className="-top-2 -right-3 ring-2 ring-[#26241f]" />
+            </span>
             <span className="max-w-full truncate px-1">
-              {item.label.length > 12 ? (item.shortLabel ?? item.label) : item.label}
+              {item.label.length > 13 ? (item.shortLabel ?? item.label) : item.label}
             </span>
           </SidebarLink>
         );
@@ -346,7 +359,8 @@ function SidebarSection({ title, children }: { title: string; children: React.Re
 }
 
 /** Bottom navigation bar on phones. */
-function MobileNav({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
+function MobileNav({ nav: all, pathname }: { nav: NavItem[]; pathname: string }) {
+  const nav = all.filter((n) => !n.hideOnPhone);
   return (
     <nav
       className="fixed inset-x-0 bottom-0 z-30 border-t border-sun-line bg-[#f6f2e8]/90 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden dark:bg-[#1a1915]/90"
@@ -372,7 +386,10 @@ function MobileNav({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
                     active && "bg-ink text-white dark:text-[#1f1e1b]",
                   )}
                 >
-                  <Icon className="size-5" />
+                  <span className="relative">
+                    <Icon className="size-5" />
+                    <NavBadge count={item.badge} className="-top-1.5 -right-2.5 ring-2 ring-[#f6f2e8] dark:ring-[#1a1915]" />
+                  </span>
                 </span>
                 {item.shortLabel ?? item.label}
               </Link>
@@ -381,5 +398,21 @@ function MobileNav({ nav, pathname }: { nav: NavItem[]; pathname: string }) {
         })}
       </ul>
     </nav>
+  );
+}
+
+/** The orange unread counter on a navigation item. */
+function NavBadge({ count, className }: { count?: number; className?: string }) {
+  if (!count) return null;
+  return (
+    <span
+      className={cn(
+        "absolute flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-orange px-1 text-[10px] leading-none font-semibold text-white tabular-nums",
+        className,
+      )}
+      aria-label={`${count} unread`}
+    >
+      {count > 9 ? "9+" : count}
+    </span>
   );
 }

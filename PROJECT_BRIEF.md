@@ -16,7 +16,7 @@ Task tracking and management for a company with three levels: the owner, manager
 3. Adding someone to a team is direct (no invitation to accept).
 4. Work counts as done only when it is **passed in review**. The assignee submits it for review (with a note on what they delivered); the reviewer passes it (optional feedback) or fails it (feedback required), which sends it back as In progress until it is resubmitted. The reviewer is the team's manager; for a manager's own work (from the owner or themselves) it is the owner. The owner may review anything. A lead can still reopen a passed task with a reason (logged, shown to the assignee as the change to make).
 5. Leads can edit, reassign and archive tasks; every change is logged. Only the person who assigned a task can delete it permanently (with its subtasks and history), not even the owner otherwise; archiving is the reversible option.
-6. A completion note is required. File uploads and comments are deferred to a later phase.
+6. A completion note is required. The assignee can attach photos and videos when submitting, and the reviewer when passing or failing (up to 6 per step; videos up to 50 MB; photos shrunk in the browser). Each submission or verdict keeps its own files, so every round stays on record. Files live in the private Blob store `cfm-attachments` (token `ATTACHMENTS_READ_WRITE_TOKEN`) and are only opened through `/api/files/[id]`, which checks the viewer can see the task.
 7. Employees see only their own tasks. Managers see only their own teams.
 8. Many teams (e.g. Tech, Business). Each team has one manager; a manager can run several teams; an employee is on one team.
 9. Subtasks: one level deep, always in the parent's team. Archiving a task archives its open subtasks.
@@ -42,6 +42,10 @@ Task tracking and management for a company with three levels: the owner, manager
 - Only the owner can delete an employee account (employees only; leads are changed to employee first). It's a soft delete (`User.deletedAt`): they're signed out, can't sign in or get a reset link, come off their team and are never offered for new work, but every task, review and history entry stays and they show with a "Deleted" tag.
 - Only the owner can delete a team. Its tasks first move to another team the owner chooses, so no one's work record is lost; its employees end up without a team.
 - Removing someone from a team keeps their task history.
+- Private conversations with the owner (`canSeeConversation` in `src/server/access.ts`): only the person who started one and the owner can ever see it or its files. Not HR, not managers, and never the person a case is about (they are not notified either). Notifications never include what was written.
+- "Talk to the owner": anyone except the owner can raise a case (category, optional "who it's about", urgency, text, photos/videos). The owner's first reply moves it to "in discussion"; only the owner marks it resolved or reopens it; a new message from whoever raised it reopens a resolved case. No anonymous cases.
+- HR's desk: each HR person has one private channel with the owner for meeting reports (date, title, attendees, what was discussed, decisions, action items, photos/videos) and messages. Only HR sends reports; the owner reads and replies (replies can quote a report).
+- Messages can be deleted only by their sender, only in the first 5 minutes; a "deleted" placeholder stays and its files are removed. Deleting the first message of a case withdraws the case. After 5 minutes everything stays on record.
 
 ## Stack
 Next.js 16 (App Router, TypeScript) · PostgreSQL · Prisma 7 · Better Auth · Zod · Tailwind CSS v4 + shadcn/ui · Recharts.

@@ -60,34 +60,77 @@ enum TaskActivityType {
   FAILED
 }
 
+enum AttachmentKind {
+  IMAGE
+  VIDEO
+}
+
+/// A private conversation with the owner.
+enum ConversationKind {
+  /// "Talk to the owner": someone raises a problem. Only they and the owner see it.
+  OWNER_CASE
+  /// One HR person's private channel with the owner: meeting reports and messages.
+  HR_DESK
+}
+
+enum CaseStatus {
+  /// Raised, the owner hasn't replied yet.
+  OPEN
+  /// The owner has replied.
+  IN_DISCUSSION
+  /// The owner closed it. A new message from whoever raised it reopens it.
+  RESOLVED
+  /// Taken back by whoever raised it, within minutes of sending (see MESSAGE_DELETE_WINDOW_MS).
+  WITHDRAWN
+}
+
+enum CaseCategory {
+  COLLEAGUE
+  MANAGER
+  WORKLOAD
+  CONDUCT
+  OTHER
+}
+
+enum CaseUrgency {
+  NORMAL
+  URGENT
+}
+
 // ─── Auth (Better Auth) ─────────────────────────────────────────────────────
 
 model User {
-  id              String   @id
+  id              String    @id
   name            String
-  email           String   @unique
-  emailVerified   Boolean  @default(false)
+  email           String    @unique
+  emailVerified   Boolean   @default(false)
   image           String?
-  username        String?  @unique
+  username        String?   @unique
   displayUsername String?
   /// Never accepted from sign-up input; only changed by server-side admin tooling.
-  role            Role     @default(MEMBER)
+  role            Role      @default(MEMBER)
   /// Set when the owner deletes the account. The person can't sign in any
   /// more, but their tasks and history stay, tagged "Deleted".
   deletedAt       DateTime?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   sessions Session[]
   accounts Account[]
 
-  managedTeams      Team[]             @relation("TeamManager")
-  memberships       TeamMember[]       @relation("MembershipUser")
-  addedMembers      TeamMember[]       @relation("MembershipAddedBy")
-  assignedTasks     Task[]             @relation("TaskAssignee")
-  createdTasks      Task[]             @relation("TaskCreator")
+  managedTeams      Team[]                @relation("TeamManager")
+  memberships       TeamMember[]          @relation("MembershipUser")
+  addedMembers      TeamMember[]          @relation("MembershipAddedBy")
+  assignedTasks     Task[]                @relation("TaskAssignee")
+  createdTasks      Task[]                @relation("TaskCreator")
   taskActivities    TaskActivity[]
   pushSubscriptions PushSubscription[]
+  attachments       Attachment[]
+  conversations     Conversation[]        @relation("ConversationCreator")
+  casesAbout        Conversation[]        @relation("ConversationAbout")
+  messages          ConversationMessage[]
+  conversationReads ConversationRead[]
+  meetingsAttended  MeetingReport[]       @relation("MeetingAttendees")
 
   @@map("users")
 }
@@ -266,7 +309,137 @@ model TaskActivity {
   details    Json?
   createdAt  DateTime         @default(now())
 
+  /// Photos and videos handed in with a submission or a review verdict.
+  attachments Attachment[]
+
   @@index([taskId, createdAt])
   @@index([actorId])
   @@map("task_activities")
+}
+
+// ─── Attachments ────────────────────────────────────────────────────────────
+
+/// A photo or video someone uploaded, kept in the private Blob store
+/// `cfm-attachments` and only ever served through `/api/files/[id]`, which
+/// checks the viewer may see what it's attached to.
+///
+/// The browser uploads straight to storage first, leaving a draft (no
+/// parent). Saving the submission or review links the drafts; drafts nobody
+/// used are removed after a day.
+model Attachment {
+  id          String         @id @default(cuid())
+  uploaderId  String
+  uploader    User           @relation(fields: [uploaderId], references: [id], onDelete: Restrict)
+  kind        AttachmentKind
+  /// The file's name on the uploader's device, shown in the viewer.
+  name        String
+  contentType String
+  size        Int
+  /// Where it sits in the Blob store. Never sent to the browser.
+  pathname    String         @unique
+
+  /// What it's attached to: a submission or review step, or a message.
+  /// Both are null while it's a draft.
+  activityId String?
+  activity   TaskActivity?        @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  messageId  String?
+  message    ConversationMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([activityId])
+  @@index([messageId])
+  @@index([uploaderId, createdAt])
+  @@map("attachments")
+}
+
+// ─── Private conversations with the owner ──────────────────────────────────
+
+/// A private thread between one person and the owner: a case someone raised
+/// ("Talk to the owner"), or an HR person's desk with the owner. Only its
+/// creator and the owner can ever see it (`canSeeConversation`); the person a
+/// case is about never does.
+model Conversation {
+  id        String           @id @default(cuid())
+  kind      ConversationKind
+  /// Who raised the case, or the HR person the desk belongs to.
+  creatorId String
+  creator   User             @relation("ConversationCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+
+  // Cases only.
+  subject     String?
+  category    CaseCategory?
+  urgency     CaseUrgency?
+  /// Who the problem is with (optional). Never shown to them.
+  aboutUserId String?
+  aboutUser   User?         @relation("ConversationAbout", fields: [aboutUserId], references: [id], onDelete: SetNull)
+  status      CaseStatus    @default(OPEN)
+  resolvedAt  DateTime?
+
+  /// HR desks only: "hr:<userId>", so each HR person has exactly one.
+  deskKey String? @unique
+
+  /// For unread markers: when the last message came, and from whom.
+  lastMessageAt       DateTime @default(now())
+  lastMessageAuthorId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages ConversationMessage[]
+  reads    ConversationRead[]
+
+  @@index([kind, lastMessageAt])
+  @@index([creatorId])
+  @@map("conversations")
+}
+
+model ConversationMessage {
+  id             String                @id @default(cuid())
+  conversationId String
+  conversation   Conversation          @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  authorId       String
+  author         User                  @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body           String                @default("")
+  /// A reply quoting an earlier message (e.g. the owner asking about a report).
+  replyToId      String?
+  replyTo        ConversationMessage?  @relation("MessageReplies", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies        ConversationMessage[] @relation("MessageReplies")
+  /// Set when the sender deleted it within the allowed minutes. The body and
+  /// files are removed; a "This message was deleted" placeholder stays.
+  deletedAt      DateTime?
+  createdAt      DateTime              @default(now())
+
+  attachments Attachment[]
+  report      MeetingReport?
+
+  @@index([conversationId, createdAt])
+  @@map("conversation_messages")
+}
+
+/// A meeting report HR sends the owner, shown as a card in HR's desk.
+model MeetingReport {
+  id          String              @id @default(cuid())
+  messageId   String              @unique
+  message     ConversationMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  meetingDate DateTime            @db.Date
+  title       String
+  attendees   User[]              @relation("MeetingAttendees")
+  discussed   String
+  decisions   String              @default("")
+  actionItems String              @default("")
+
+  @@map("meeting_reports")
+}
+
+/// How far each person has read a conversation ("Seen", unread badges).
+model ConversationRead {
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  userId         String
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadAt     DateTime
+
+  @@id([conversationId, userId])
+  @@map("conversation_reads")
 }

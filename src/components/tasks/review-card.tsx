@@ -1,6 +1,8 @@
 import { BadgeCheck, Hourglass, MessageSquareText, RotateCcw } from "lucide-react";
 import type { TaskActivityType } from "@/generated/prisma/client";
+import { AttachmentGallery } from "@/components/attachments/attachment-gallery";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import type { AttachmentView } from "@/lib/attachments";
 import { formatDateTime, formatRelative } from "@/lib/format";
 import { changesRequested, type TaskStatus } from "@/lib/tasks/rules";
 import { cn } from "@/lib/utils";
@@ -16,7 +18,7 @@ type ReviewTask = {
   timesFailed: number;
 };
 
-type ReviewActivity = { type: TaskActivityType; actor: { name: string } };
+type ReviewActivity = { type: TaskActivityType; actor: { name: string }; attachments?: AttachmentView[] };
 
 /**
  * Where the work stands in review, for both the assignee and the reviewer:
@@ -46,6 +48,9 @@ export function ReviewCard({
   const lastVerdict = activities.find((a) => a.type === "PASSED" || a.type === "FAILED" || a.type === "REOPENED");
   const verdictBy = lastVerdict?.actor.name ?? reviewer;
   const you = viewer === "assignee";
+  // Files from the latest hand-in, and from the verdict on it.
+  const handedIn = activities.find((a) => a.type === "SUBMITTED")?.attachments ?? [];
+  const verdictFiles = lastVerdict?.attachments ?? [];
 
   if (task.status === "SUBMITTED") {
     return (
@@ -64,7 +69,7 @@ export function ReviewCard({
           </CardAction>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Delivered note={task.completionNote} label={you ? "What you delivered" : "What they delivered"} />
+          <Delivered note={task.completionNote} label={you ? "What you delivered" : "What they delivered"} files={handedIn} />
           {actions ? (
             <div className="flex flex-wrap gap-2 border-t pt-4">{actions}</div>
           ) : (
@@ -95,7 +100,7 @@ export function ReviewCard({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Quote by={verdictBy} tone="amber">
+          <Quote by={verdictBy} tone="amber" files={verdictFiles}>
             {task.reviewNote}
           </Quote>
         </CardContent>
@@ -122,10 +127,14 @@ export function ReviewCard({
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <Delivered note={task.completionNote} label={you ? "What you delivered" : `What ${assigneeName} delivered`} />
-          {task.reviewNote && (
-            <Quote by={verdictBy} tone="emerald">
-              {task.reviewNote}
+          <Delivered
+            note={task.completionNote}
+            label={you ? "What you delivered" : `What ${assigneeName} delivered`}
+            files={passed ? handedIn : []}
+          />
+          {(task.reviewNote || (passed && verdictFiles.length > 0)) && (
+            <Quote by={verdictBy} tone="emerald" files={passed ? verdictFiles : []}>
+              {task.reviewNote || <span className="text-muted-foreground">No written feedback.</span>}
             </Quote>
           )}
         </CardContent>
@@ -136,18 +145,29 @@ export function ReviewCard({
   return null;
 }
 
-function Delivered({ note, label }: { note: string | null; label: string }) {
+function Delivered({ note, label, files }: { note: string | null; label: string; files: AttachmentView[] }) {
   return (
     <div>
       <p className="mb-1 text-xs font-medium text-muted-foreground">{label}</p>
       <p className="text-sm leading-relaxed whitespace-pre-wrap">
         {note || <span className="text-muted-foreground">No note.</span>}
       </p>
+      <AttachmentGallery attachments={files} className="mt-3" />
     </div>
   );
 }
 
-function Quote({ by, tone, children }: { by: string; tone: "amber" | "emerald"; children: React.ReactNode }) {
+function Quote({
+  by,
+  tone,
+  files,
+  children,
+}: {
+  by: string;
+  tone: "amber" | "emerald";
+  files: AttachmentView[];
+  children: React.ReactNode;
+}) {
   return (
     <figure
       className={cn(
@@ -156,6 +176,7 @@ function Quote({ by, tone, children }: { by: string; tone: "amber" | "emerald"; 
       )}
     >
       <blockquote className="text-sm leading-relaxed whitespace-pre-wrap">{children}</blockquote>
+      <AttachmentGallery attachments={files} className="mt-3" />
       <figcaption className="mt-2 text-xs text-muted-foreground">— {by}</figcaption>
     </figure>
   );

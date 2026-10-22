@@ -1,4 +1,5 @@
 import { AppShell, type NavItem } from "@/components/app-shell";
+import { countUnread } from "@/server/conversations";
 import { requireManager } from "@/server/session";
 
 const nav: NavItem[] = [
@@ -7,13 +8,16 @@ const nav: NavItem[] = [
   { href: "/manager/tasks", label: "Team tasks", shortLabel: "Tasks", icon: "tasks" },
   { href: "/manager/teams", label: "Teams", icon: "team" },
   { href: "/manager/analytics", label: "Analytics", shortLabel: "Stats", icon: "analytics" },
+  { href: "/manager/talk", label: "Talk to owner", shortLabel: "Owner", icon: "talk" },
 ];
 
 /** A manager's workspace: their own work from the owner, plus the teams they run. */
 export default async function ManagerLayout({ children }: LayoutProps<"/manager">) {
   const user = await requireManager();
+  const unread = await countUnread(user);
+  const badged = nav.map((n) => (n.href === "/manager/talk" ? { ...n, badge: unread } : n));
   return (
-    <AppShell nav={nav} user={{ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role }}>
+    <AppShell nav={badged} user={{ id: user.id, name: user.name, email: user.email, image: user.image, role: user.role }}>
       {children}
     </AppShell>
   );

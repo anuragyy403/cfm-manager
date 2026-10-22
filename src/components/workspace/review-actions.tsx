@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { BadgeCheck, CircleX, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { AttachmentPicker } from "@/components/attachments/attachment-picker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,13 +20,17 @@ import { reviewTaskAction } from "@/server/actions/lead";
 
 type Decision = "PASS" | "FAIL";
 
-const COPY: Record<Decision, { title: string; description: (name: string) => string; label: string; hint: string; placeholder: string }> = {
+const COPY: Record<
+  Decision,
+  { title: string; description: (name: string) => string; label: string; hint: string; placeholder: string; attachHint: string }
+> = {
   PASS: {
     title: "Pass this task",
     description: (name) => `It will count as done for ${name}, and they'll get a notification.`,
     label: "Feedback (optional)",
     hint: "Optional. A word of thanks or a note for next time.",
     placeholder: "e.g. Great work, exactly what the client asked for.",
+    attachHint: "Optional, e.g. the finished work as the client sees it.",
   },
   FAIL: {
     title: "Fail and send back",
@@ -33,6 +38,7 @@ const COPY: Record<Decision, { title: string; description: (name: string) => str
     label: "What needs to change?",
     hint: "Required. Be specific so they can fix it in one go.",
     placeholder: "e.g. The mobile layout breaks below 400px, and the contact form doesn't send.",
+    attachHint: "Show what's wrong: a screenshot or a short screen recording.",
   },
 };
 
@@ -41,6 +47,7 @@ export function ReviewActions({ taskId, assigneeName }: { taskId: string; assign
   const [open, setOpen] = useState<Decision | null>(null);
   const [error, setError] = useState<string>();
   const [pending, startTransition] = useTransition();
+  const [files, setFiles] = useState({ ids: [] as string[], busy: false });
   const first = assigneeName.split(" ")[0] ?? assigneeName;
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -49,7 +56,7 @@ export function ReviewActions({ taskId, assigneeName }: { taskId: string; assign
     const decision = open;
     const note = new FormData(e.currentTarget).get("note");
     startTransition(async () => {
-      const res = await reviewTaskAction(taskId, { decision, note });
+      const res = await reviewTaskAction(taskId, { decision, note, attachmentIds: files.ids });
       if (!res.ok) {
         setError(res.fieldErrors?.note ?? res.error);
         return;
@@ -99,6 +106,10 @@ export function ReviewActions({ taskId, assigneeName }: { taskId: string; assign
                 <Textarea id="review-note" name="note" rows={4} placeholder={copy.placeholder} autoFocus />
                 {error ? <FieldError>{error}</FieldError> : <FieldDescription>{copy.hint}</FieldDescription>}
               </Field>
+              <Field className="mt-4">
+                <FieldLabel>Photos or videos (optional)</FieldLabel>
+                <AttachmentPicker onChange={setFiles} disabled={pending} hint={copy.attachHint} />
+              </Field>
             </form>
             <DialogFooter>
               <Button variant="outline" onClick={() => setOpen(null)} disabled={pending}>
@@ -107,12 +118,12 @@ export function ReviewActions({ taskId, assigneeName }: { taskId: string; assign
               <Button
                 type="submit"
                 form="review-form"
-                disabled={pending}
+                disabled={pending || files.busy}
                 variant={open === "FAIL" ? "destructive" : "default"}
                 className={open === "PASS" ? "bg-emerald-600 text-white hover:bg-emerald-700" : undefined}
               >
-                {pending && <Loader2 className="animate-spin" />}
-                {open === "PASS" ? "Pass task" : "Fail and send back"}
+                {(pending || files.busy) && <Loader2 className="animate-spin" />}
+                {files.busy ? "Uploading…" : open === "PASS" ? "Pass task" : "Fail and send back"}
               </Button>
             </DialogFooter>
           </DialogContent>
