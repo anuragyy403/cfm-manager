@@ -23,6 +23,8 @@ Task tracking and management for a company with three levels: the owner, manager
 10. Deadlines are date + time. "Due soon" = within 48 hours.
 11. Dashboards refresh on navigation and poll periodically; no realtime service.
 12. Completion rate = passed ÷ assigned (non-archived). On-time rate = passed tasks handed in (submitted) by the deadline ÷ passed, so review time never counts against the assignee. First-time pass rate = passed without being sent back ÷ passed. Work waiting for review is never overdue.
+13. Work reports filter by team, individual assignee, and inclusive assignment dates in the company timezone. Reports and CSV exports use the same server-side scopes: owner/HR company-wide, managers' own teams, employees' own tasks. Only passed tasks count as done; submitted work is separately marked waiting for review. Archived tasks are excluded and subtasks count separately. Reports support CSV and print/save PDF.
+14. Employee chat is a separate direct-message section available to every active account across roles and teams. Only the two participants can read a chat or its files, including when the viewer is the owner or HR. It never shares tables or access rules with private owner cases and HR reports. Images/videos use the existing limits; PDF, DOCX, XLSX, PPTX, TXT, CSV and ZIP documents are supported up to 25 MB, six files per message. Deleted accounts keep read-only history. Sender-only deletion within five minutes leaves a placeholder. Chat polls every five seconds while visible.
 
 ## Rules that must always hold (enforced on the server)
 - Scopes live in `src/server/access.ts`: the owner sees everything, a manager only teams they manage, an employee only tasks assigned to them.

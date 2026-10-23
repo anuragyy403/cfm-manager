@@ -41,7 +41,7 @@ const LINK_TTL_MS = 60 * 60 * 1000;
 export const attachmentViewSelect = { id: true, kind: true, name: true, size: true } satisfies Prisma.AttachmentSelect;
 
 /** Not attached to anything yet. */
-const DRAFT = { activityId: null, messageId: null } satisfies Prisma.AttachmentWhereInput;
+const DRAFT = { activityId: null, messageId: null, chatMessageId: null } satisfies Prisma.AttachmentWhereInput;
 
 function storeToken() {
   const token = process.env.ATTACHMENTS_READ_WRITE_TOKEN;
@@ -73,14 +73,14 @@ function cleanName(name: string, ext: AttachmentExt) {
 /** Step 1: a token to upload one file of this type and size to a new path. */
 export async function createUploadToken(user: CurrentUser, file: { type: string; size: number }) {
   const ext = extForType(file.type);
-  if (!ext) throw new DomainError("Only photos (JPG, PNG, WebP, GIF) and videos (MP4, MOV, WebM) can be attached.");
+  if (!ext) throw new DomainError("Use a photo, MP4/MOV/WebM video, PDF, Office document, TXT, CSV or ZIP file.");
   const { contentType, kind } = ATTACHMENT_TYPES[ext];
   const max = maxBytesFor(kind);
   if (file.size > max) {
     throw new DomainError(
       kind === "VIDEO"
         ? `That video is over ${formatBytes(max)}. Trim it or record a shorter clip.`
-        : `That photo is over ${formatBytes(max)}.`,
+        : `That file is over ${formatBytes(max)}.`,
     );
   }
   const recent = await prisma.attachment.count({
@@ -139,9 +139,14 @@ export async function registerUpload(user: CurrentUser, pathname: string, name: 
   if (!meta) throw new DomainError("The upload didn't finish. Try again.");
 
   const bytes = await firstBytes(pathname);
-  if (meta.size > maxBytesFor(kind) || sniff(bytes) !== ext) {
+  const signatureMatches = kind === "FILE"
+    ? ext === "pdf" ? String.fromCharCode(...bytes.slice(0, 5)) === "%PDF-"
+      : ["docx", "xlsx", "pptx", "zip"].includes(ext) ? bytes[0] === 0x50 && bytes[1] === 0x4b
+        : !bytes.includes(0) && !sniff(bytes)
+    : sniff(bytes) === ext;
+  if (meta.size <= 0 || meta.size > maxBytesFor(kind) || !signatureMatches) {
     await del(pathname, { token: storeToken() }).catch(() => {});
-    throw new DomainError(kind === "VIDEO" ? "That file isn't a video we can play." : "That file isn't a photo we can show.");
+    throw new DomainError("The file contents don't match its type, or it exceeds the size limit.");
   }
 
   return prisma.attachment.create({
@@ -176,13 +181,13 @@ export async function claimDrafts(
   tx: Prisma.TransactionClient,
   user: CurrentUser,
   ids: string[],
-  target: { activityId: string } | { messageId: string },
+  target: { activityId: string } | { messageId: string } | { chatMessageId: string },
 ) {
   const unique = [...new Set(ids)];
   if (unique.length === 0) return;
   if (unique.length > MAX_ATTACHMENTS) throw new DomainError(`Attach up to ${MAX_ATTACHMENTS} files.`);
   const { count } = await tx.attachment.updateMany({
-    where: { id: { in: unique }, uploaderId: user.id, ...DRAFT },
+    where: { id: { in: unique }, uploaderId: user.id, ...DRAFT, ...("chatMessageId" in target ? {} : { kind: { in: ["IMAGE", "VIDEO"] } }) },
     data: target,
   });
   if (count !== unique.length) {
@@ -227,7 +232,10 @@ export async function findViewableAttachment(viewer: CurrentUser, id: string) {
   return prisma.attachment.findFirst({
     where: {
       id,
-      OR: [{ uploaderId: viewer.id, ...DRAFT }, onVisibleTask, inVisibleConversation],
+      OR: [
+        { uploaderId: viewer.id, ...DRAFT }, onVisibleTask, inVisibleConversation,
+        { chatMessage: { deletedAt: null, chat: { OR: [{ firstId: viewer.id }, { secondId: viewer.id }] } } },
+      ],
     },
     select: { pathname: true, name: true, contentType: true },
   });

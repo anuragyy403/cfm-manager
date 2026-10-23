@@ -63,6 +63,7 @@ enum TaskActivityType {
 enum AttachmentKind {
   IMAGE
   VIDEO
+  FILE
 }
 
 /// A private conversation with the owner.
@@ -131,6 +132,9 @@ model User {
   messages          ConversationMessage[]
   conversationReads ConversationRead[]
   meetingsAttended  MeetingReport[]       @relation("MeetingAttendees")
+  chatsAsFirst      EmployeeChat[]        @relation("ChatFirst")
+  chatsAsSecond     EmployeeChat[]        @relation("ChatSecond")
+  chatMessages      EmployeeChatMessage[]
 
   @@map("users")
 }
@@ -344,11 +348,14 @@ model Attachment {
   activity   TaskActivity?        @relation(fields: [activityId], references: [id], onDelete: Cascade)
   messageId  String?
   message    ConversationMessage? @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  chatMessageId String?
+  chatMessage EmployeeChatMessage? @relation(fields: [chatMessageId], references: [id], onDelete: Cascade)
 
   createdAt DateTime @default(now())
 
   @@index([activityId])
   @@index([messageId])
+  @@index([chatMessageId])
   @@index([uploaderId, createdAt])
   @@map("attachments")
 }
@@ -442,4 +449,38 @@ model ConversationRead {
 
   @@id([conversationId, userId])
   @@map("conversation_reads")
+}
+
+/// Company direct messages. Only these two participants may read the thread.
+/// Kept separate from confidential owner cases and HR meeting reports.
+model EmployeeChat {
+  id String @id @default(cuid())
+  firstId String
+  first User @relation("ChatFirst", fields: [firstId], references: [id], onDelete: Restrict)
+  secondId String
+  second User @relation("ChatSecond", fields: [secondId], references: [id], onDelete: Restrict)
+  firstReadAt DateTime?
+  secondReadAt DateTime?
+  lastMessageAt DateTime @default(now())
+  createdAt DateTime @default(now())
+  messages EmployeeChatMessage[]
+
+  @@unique([firstId, secondId])
+  @@index([secondId, lastMessageAt])
+  @@map("employee_chats")
+}
+
+model EmployeeChatMessage {
+  id String @id @default(cuid())
+  chatId String
+  chat EmployeeChat @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  authorId String
+  author User @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  body String @default("")
+  createdAt DateTime @default(now())
+  deletedAt DateTime?
+  attachments Attachment[]
+
+  @@index([chatId, createdAt, id])
+  @@map("employee_chat_messages")
 }

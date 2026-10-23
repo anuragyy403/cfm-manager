@@ -112,14 +112,15 @@ afterAll(async () => {
 });
 
 describe("uploading", () => {
-  it("only hands out tokens for photos and videos within the size limits, in the uploader's own folder", async () => {
+  it("hands out tokens for supported media and documents within the size limits, in the uploader's own folder", async () => {
     const { pathname } = await createUploadToken(alice, { type: "video/quicktime", size: 20_000_000 });
     expect(pathname).toMatch(new RegExp(`^local/${alice.id}/[0-9a-f]{32}\\.mp4$`));
     expect(generateClientTokenFromReadWriteToken).toHaveBeenCalledWith(
       expect.objectContaining({ pathname, allowedContentTypes: ["video/mp4"], maximumSizeInBytes: MAX_VIDEO_BYTES }),
     );
     await expect(createUploadToken(alice, { type: "video/mp4", size: MAX_VIDEO_BYTES + 1 })).rejects.toThrow(/50 MB/);
-    await expect(createUploadToken(alice, { type: "application/pdf", size: 1000 })).rejects.toThrow(DomainError);
+    await expect(createUploadToken(alice, { type: "application/pdf", size: 1000 })).resolves.toMatchObject({ contentType: "application/pdf" });
+    await expect(createUploadToken(alice, { type: "application/pdf", size: 25 * 1024 * 1024 + 1 })).rejects.toThrow(/25 MB/);
     await expect(createUploadToken(alice, { type: "image/svg+xml", size: 1000 })).rejects.toThrow(DomainError);
   });
 
@@ -140,6 +141,15 @@ describe("uploading", () => {
     stored.set(pathname, { bytes: JPEG, size: 100 });
     await expect(registerUpload(alice, pathname, "x.jpg")).rejects.toThrow("That upload isn't yours.");
     await expect(registerUpload(alice, `local/${alice.id}/../${bob.id}/a.jpg`, "x.jpg")).rejects.toThrow(DomainError);
+  });
+
+  it("validates document signatures and prevents documents being attached to task submissions", async () => {
+    const pdf = await upload(alice, new TextEncoder().encode("%PDF-1.7\n"), "application/pdf", 1000);
+    expect(pdf.kind).toBe("FILE");
+    await expect(submitMyTask(alice, taskId, "Document", [pdf.id])).rejects.toThrow(DomainError);
+    const { pathname } = await createUploadToken(alice, { type: "application/pdf", size: 100 });
+    stored.set(pathname, { bytes: JPEG, size: 100 });
+    await expect(registerUpload(alice, pathname, "fake.pdf")).rejects.toThrow(DomainError);
   });
 
   it("people discard only their own drafts", async () => {

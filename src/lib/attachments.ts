@@ -3,7 +3,7 @@
  * server (which re-checks everything: anyone can call an action directly).
  */
 
-export type AttachmentKind = "IMAGE" | "VIDEO";
+export type AttachmentKind = "IMAGE" | "VIDEO" | "FILE";
 
 /** What the viewer needs to show an attachment. The storage path never leaves the server. */
 export type AttachmentView = {
@@ -21,6 +21,7 @@ export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 /** Photos are shrunk in the browser first, so this only stops oddities. */
 export const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+export const MAX_FILE_BYTES = 25 * 1024 * 1024;
 
 /** Longest side of a photo after the browser shrinks it. */
 export const IMAGE_MAX_PX = 2000;
@@ -36,6 +37,13 @@ export const ATTACHMENT_TYPES = {
   gif: { contentType: "image/gif", kind: "IMAGE" },
   mp4: { contentType: "video/mp4", kind: "VIDEO" },
   webm: { contentType: "video/webm", kind: "VIDEO" },
+  pdf: { contentType: "application/pdf", kind: "FILE" },
+  txt: { contentType: "text/plain", kind: "FILE" },
+  csv: { contentType: "text/csv", kind: "FILE" },
+  docx: { contentType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", kind: "FILE" },
+  xlsx: { contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", kind: "FILE" },
+  pptx: { contentType: "application/vnd.openxmlformats-officedocument.presentationml.presentation", kind: "FILE" },
+  zip: { contentType: "application/zip", kind: "FILE" },
 } as const satisfies Record<string, { contentType: string; kind: AttachmentKind }>;
 
 export type AttachmentExt = keyof typeof ATTACHMENT_TYPES;
@@ -56,13 +64,15 @@ export function extForType(type: string): AttachmentExt | null {
       return "mp4";
     case "video/webm":
       return "webm";
+    case "application/x-zip-compressed":
+      return "zip";
     default:
-      return null;
+      return (Object.entries(ATTACHMENT_TYPES).find(([, value]) => value.contentType === type)?.[0] as AttachmentExt | undefined) ?? null;
   }
 }
 
 export function maxBytesFor(kind: AttachmentKind) {
-  return kind === "VIDEO" ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES;
+  return kind === "VIDEO" ? MAX_VIDEO_BYTES : kind === "FILE" ? MAX_FILE_BYTES : MAX_IMAGE_BYTES;
 }
 
 /** "1 GB", "4.2 MB", "380 KB". */

@@ -4,6 +4,22 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Small report metadata and chat previews need stronger contrast on cream. */
+.work-report, .employee-chat { --muted-foreground: #686258; }
+.dark :is(.work-report, .employee-chat) { --muted-foreground: #a8a397; }
+
+@media print {
+  body { background: white !important; color: black !important; }
+  [data-slot="sidebar"], [data-slot="sidebar-container"], [data-slot="sidebar-gap"], [data-slot="sidebar-rail"], header:has([data-slot="sidebar-trigger"]), nav, footer { display: none !important; }
+  [data-slot="sidebar-inset"] { margin: 0 !important; }
+  body:has(.work-report) { --background: white; --card: white; --foreground: black; --muted-foreground: #444; }
+  .work-report { width: 100%; --muted-foreground: #444 !important; }
+  .work-report table { font-size: 10px; }
+  .work-report tr { break-inside: avoid; }
+  .work-report thead { display: table-header-group; }
+  .work-report .overflow-x-auto { overflow: visible; }
+}
+
 @theme inline {
   --color-brand-navy: var(--brand-navy);
   --color-brand-navy-soft: var(--brand-navy-soft);

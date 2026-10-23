@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, Play } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { type AttachmentView, formatBytes } from "@/lib/attachments";
@@ -46,6 +46,12 @@ export function AttachmentGallery({
       <ul className={cn("flex flex-wrap gap-2", className)}>
         {attachments.map((a, i) => (
           <li key={a.id}>
+            {a.kind === "FILE" ? (
+              <a href={fileUrl(a.id, true)} download={a.name} className="flex max-w-60 items-center gap-2 rounded-lg border bg-muted px-3 py-3 text-sm hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring">
+                <FileText className="size-5 shrink-0" />
+                <span className="min-w-0"><span className="block truncate">{a.name}</span><span className="text-xs text-muted-foreground">{formatBytes(a.size)} · Download</span></span>
+              </a>
+            ) : (
             <button
               type="button"
               onClick={() => setOpen(i)}
@@ -70,6 +76,7 @@ export function AttachmentGallery({
                 <img src={fileUrl(a.id)} alt={a.name} loading="lazy" className="size-full object-cover transition group-hover:scale-105" />
               )}
             </button>
+            )}
           </li>
         ))}
       </ul>
@@ -80,12 +87,14 @@ export function AttachmentGallery({
             <div className="pr-10">
               <DialogTitle className="truncate text-sm font-medium text-white">{current.name}</DialogTitle>
               <DialogDescription className="text-xs text-white/60">
-                {current.kind === "VIDEO" ? "Video" : "Photo"} · {formatBytes(current.size)}
+                {current.kind === "FILE" ? "Document" : current.kind === "VIDEO" ? "Video" : "Photo"} · {formatBytes(current.size)}
                 {many && ` · ${open! + 1} of ${attachments.length}`}
               </DialogDescription>
             </div>
             <div className="relative flex min-h-48 items-center justify-center">
-              {current.kind === "VIDEO" ? (
+              {current.kind === "FILE" ? (
+                <div className="flex flex-col items-center gap-3 p-10"><FileText className="size-12" /><p className="max-w-sm break-all text-center text-sm">{current.name}</p><p className="text-xs text-white/70">Download this document to open it on your device.</p></div>
+              ) : current.kind === "VIDEO" ? (
                 <video key={current.id} src={fileUrl(current.id)} controls autoPlay playsInline className="max-h-[70vh] w-full rounded-md bg-black" />
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element

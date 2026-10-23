@@ -294,6 +294,15 @@ const ownerDirect: SeedTask[] = [
 ];
 
 async function main() {
+  // Messages and drafts reference people with Restrict; clear them before
+  // rebuilding the local demo accounts. This script is local-only.
+  await prisma.attachment.deleteMany();
+  await prisma.employeeChatMessage.deleteMany();
+  await prisma.employeeChat.deleteMany();
+  await prisma.meetingReport.deleteMany();
+  await prisma.conversationRead.deleteMany();
+  await prisma.conversationMessage.deleteMany();
+  await prisma.conversation.deleteMany();
   console.log("Clearing existing data…");
   await prisma.taskActivity.deleteMany();
   await prisma.task.deleteMany();

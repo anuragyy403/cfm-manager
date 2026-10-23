@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { put } from "@vercel/blob/client";
-import { AlertCircle, ImagePlus, Loader2, Play, X } from "lucide-react";
+import { AlertCircle, FileText, ImagePlus, Loader2, Play, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,6 +11,7 @@ import {
   IMAGE_MAX_PX,
   MAX_ATTACHMENTS,
   MAX_VIDEO_BYTES,
+  MAX_FILE_BYTES,
 } from "@/lib/attachments";
 import { cn } from "@/lib/utils";
 import { discardUploadAction, finishUploadAction, startUploadAction } from "@/server/actions/attachments";
@@ -50,6 +51,7 @@ type Item = {
   key: string;
   name: string;
   isVideo: boolean;
+  isFile: boolean;
   preview: string;
   status: "uploading" | "ready" | "error";
   progress: number;
@@ -67,10 +69,12 @@ export function AttachmentPicker({
   onChange,
   disabled,
   hint = "Photos or videos, up to 50 MB each.",
+  allowFiles = false,
 }: {
   onChange: (state: { ids: string[]; busy: boolean }) => void;
   disabled?: boolean;
   hint?: string;
+  allowFiles?: boolean;
 }) {
   const input = useRef<HTMLInputElement>(null);
   const [items, setItems] = useState<Item[]>([]);
@@ -102,7 +106,7 @@ export function AttachmentPicker({
 
   async function upload(item: Item, file: File) {
     try {
-      const body = item.isVideo ? file : await shrinkPhoto(file).catch(() => null);
+      const body = item.isVideo || item.isFile ? file : await shrinkPhoto(file).catch(() => null);
       if (!body) throw new Error("Couldn't read that photo. Try a JPG or PNG.");
       // iPhone videos (.mov) are stored as MP4, see `extForType`.
       const type = body.type === "video/quicktime" ? "video/mp4" : body.type;
@@ -137,8 +141,13 @@ export function AttachmentPicker({
     const next: [Item, File][] = [];
     for (const file of picked.slice(0, Math.max(0, room))) {
       const isVideo = file.type.startsWith("video/");
-      if (!isVideo && !file.type.startsWith("image/")) {
-        toast.error(`${file.name} isn't a photo or video.`);
+      const isFile = !isVideo && !file.type.startsWith("image/");
+      if (isFile && (!allowFiles || !extForType(file.type))) {
+        toast.error(allowFiles ? `${file.name}: use PDF, DOCX, XLSX, PPTX, TXT, CSV or ZIP.` : `${file.name} isn't a photo or video.`);
+        continue;
+      }
+      if (isFile && file.size > MAX_FILE_BYTES) {
+        toast.error(`${file.name}: documents can be up to 25 MB.`);
         continue;
       }
       if (isVideo && !extForType(file.type)) {
@@ -153,6 +162,7 @@ export function AttachmentPicker({
         key: crypto.randomUUID(),
         name: file.name,
         isVideo,
+        isFile,
         preview: URL.createObjectURL(file),
         status: "uploading",
         progress: 0,
@@ -194,7 +204,11 @@ export function AttachmentPicker({
         <ul className="grid grid-cols-3 gap-2">
           {items.map((item) => (
             <li key={item.key} className="group relative aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-foreground/10">
-              {item.isVideo ? (
+              {item.isFile ? (
+                <div className="flex h-full flex-col items-center justify-center gap-2 p-3 text-center text-xs">
+                  <FileText className="size-6 shrink-0" /><span className="line-clamp-3 break-all">{item.name}</span>
+                </div>
+              ) : item.isVideo ? (
                 <>
                   <video src={`${item.preview}#t=0.1`} muted playsInline preload="metadata" className="size-full object-cover" />
                   <span className="pointer-events-none absolute top-1.5 left-1.5 flex size-5 items-center justify-center rounded-full bg-black/60 text-white">
@@ -226,6 +240,7 @@ export function AttachmentPicker({
               )}
               <button
                 type="button"
+                disabled={disabled}
                 onClick={() => remove(item)}
                 className="absolute top-1 right-1 flex size-6 items-center justify-center rounded-full bg-black/60 text-white hover:bg-black/80 focus-visible:ring-2 focus-visible:ring-white focus-visible:outline-none"
                 aria-label={`Remove ${item.name}`}
@@ -239,7 +254,7 @@ export function AttachmentPicker({
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Button type="button" variant="outline" size="sm" onClick={() => input.current?.click()} disabled={disabled || full}>
           <ImagePlus />
-          {items.length ? "Add more" : "Add photos or videos"}
+          {items.length ? "Add more" : allowFiles ? "Attach files" : "Add photos or videos"}
         </Button>
         <span className="text-xs text-muted-foreground">
           {full ? `That's the most you can attach (${MAX_ATTACHMENTS}).` : `${hint} Or drop them here.`}
@@ -248,7 +263,7 @@ export function AttachmentPicker({
       <input
         ref={input}
         type="file"
-        accept="image/*,video/mp4,video/quicktime,video/webm"
+        accept={`image/*,video/mp4,video/quicktime,video/webm${allowFiles ? ",application/pdf,text/plain,text/csv,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip" : ""}`}
         multiple
         hidden
         onChange={(e) => {

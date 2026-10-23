@@ -120,7 +120,12 @@ export function AppShell({
   const router = useRouter();
   const base = HOME_PATHS[user.role];
   const accountItem: NavItem = { href: `${base}/account`, label: "Account settings", shortLabel: "Account", icon: "account" };
-  const tiles = [...nav, accountItem];
+  const tiles: NavItem[] = [
+    ...nav,
+    { href: `${base}/work-reports`, label: "Work reports", shortLabel: "Reports", icon: "reports", hideOnPhone: true },
+    { href: `${base}/chat`, label: "Employee chat", shortLabel: "Chat", icon: "talk", hideOnPhone: true },
+    accountItem,
+  ];
   const current = tiles.find((n) => isActive(n, pathname));
   const onHome = pathname === base;
 
@@ -144,6 +149,12 @@ export function AppShell({
         </div>
       </DropdownMenuLabel>
       <DropdownMenuSeparator />
+      <DropdownMenuItem asChild>
+        <Link href={`${base}/chat`}><MessagesSquare />Employee chat</Link>
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild>
+        <Link href={`${base}/work-reports`}><NotebookPen />Work reports</Link>
+      </DropdownMenuItem>
       <DropdownMenuItem asChild>
         <Link href={accountItem.href}>
           <UserCog />
@@ -230,7 +241,7 @@ export function AppShell({
 
       <SidebarInset className="min-w-0 bg-transparent [background:var(--sun-panel)]">
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-sun-line/70 bg-[#f6f2e8]/75 px-4 backdrop-blur-xl md:h-[68px] md:px-6 dark:bg-[#1a1915]/75">
-          <SidebarTrigger className="-ml-1 hidden size-9 rounded-full border border-sun-line bg-sun-raised/80 md:inline-flex" />
+          <SidebarTrigger className="-ml-1 inline-flex size-9 rounded-full border border-sun-line bg-sun-raised/80" />
           <Link href={base} className="md:hidden" aria-label={APP_NAME}>
             <BrandMark className="size-8" />
           </Link>

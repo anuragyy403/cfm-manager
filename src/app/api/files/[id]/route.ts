@@ -15,7 +15,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/files
   const file = await findViewableAttachment(user, id);
   if (!file) return new Response("File not found.", { status: 404 });
 
-  if (new URL(request.url).searchParams.has("download")) {
+  if (new URL(request.url).searchParams.has("download") || (!file.contentType.startsWith("image/") && !file.contentType.startsWith("video/"))) {
     const stored = await readStoredFile(file.pathname);
     if (!stored?.stream) return new Response("File not found.", { status: 404 });
     return new Response(stored.stream, {
@@ -24,6 +24,7 @@ export async function GET(request: Request, { params }: RouteContext<"/api/files
         "content-length": String(stored.blob.size),
         "content-disposition": `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`,
         "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
       },
     });
   }
